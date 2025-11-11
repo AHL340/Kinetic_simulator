@@ -62,6 +62,30 @@
             flex: 1;
             margin-right: 10px;
         }
+        /* === Isolation & limiting-reactant stop rule === */
+        .species-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        /* === Isolation & limiting-reactant stop rule === */
+        .species-table th, .species-table td {
+            border: 1px solid #ccc;
+            padding: 6px;
+            text-align: center;
+        }
+        /* === Isolation & limiting-reactant stop rule === */
+        .species-table input[type="number"] {
+            width: 100%;
+            box-sizing: border-box;
+        }
+        /* === Isolation & limiting-reactant stop rule === */
+        .status-line {
+            font-size: 0.95rem;
+            margin-top: 15px;
+            font-weight: bold;
+            color: #0a3d62;
+        }
         .form-group input, .form-group select {
             flex: 2;
         }
@@ -186,6 +210,8 @@
             </div>
 
             <p class="helper-text" id="keyboardInstructions">Usa la tecla Tab para navegar entre los controles y Enter o la barra espaciadora para activar los botones.</p>
+            <!-- === Isolation & limiting-reactant stop rule === -->
+            <p id="limitingStatus" class="status-line" aria-live="polite"></p>
 
             <div class="form-group">
                 <label for="notacionDecimal">Notación decimal:</label>
@@ -212,6 +238,11 @@
                     <label for="forzarNoNegativas">Forzar concentraciones no negativas:</label>
                     <input type="checkbox" id="forzarNoNegativas" checked>
                 </div>
+                <!-- === Isolation & limiting-reactant stop rule === -->
+                <div class="form-group">
+                    <label for="salvaguardaDerivada">Detener si |dC<sub>lim</sub>/dt| ≤ 1e-12:</label>
+                    <input type="checkbox" id="salvaguardaDerivada">
+                </div>
             </details>
         </div>
 
@@ -225,31 +256,205 @@
         let grafica;  // Variable para la gráfica
         let resultados = [];  // Almacenar resultados para CSV
 
+        // === Isolation & limiting-reactant stop rule ===
+        function getCheckedIsolationSet() {
+            const set = new Set();
+            document.querySelectorAll('.cbIsolation').forEach((checkbox) => {
+                if (checkbox.checked) {
+                    const idx = parseInt(checkbox.dataset.idx, 10);
+                    if (!Number.isNaN(idx)) {
+                        set.add(idx);
+                    }
+                }
+            });
+            return set;
+        }
+
+        // === Isolation & limiting-reactant stop rule ===
+        function obtenerParametrosReactivos() {
+            const numReactivos = parseInt(document.getElementById('numReactivos').value, 10) || 0;
+            const concentraciones = [];
+            const coeficientes = [];
+
+            for (let i = 0; i < numReactivos; i++) {
+                const conc = parseFloat(document.getElementById(`C0${i}`)?.value);
+                const coef = parseFloat(document.getElementById(`stoich${i}`)?.value);
+                concentraciones.push(Number.isNaN(conc) ? 0 : conc);
+                coeficientes.push(Number.isNaN(coef) ? 0 : coef);
+            }
+
+            return { concentraciones, coeficientes };
+        }
+
+        // === Isolation & limiting-reactant stop rule ===
+        function validateIsolation(coeficientes, concentraciones, isolationSet) {
+            const mensajes = [];
+            const validado = new Set(isolationSet);
+            const reactantes = [];
+            const razones = new Map();
+
+            coeficientes.forEach((coef, idx) => {
+                if (coef < 0) {
+                    const absCoef = Math.abs(coef);
+                    const conc = Math.max(concentraciones[idx] || 0, 0);
+                    const ratio = absCoef > 0 ? conc / absCoef : Infinity;
+                    reactantes.push(idx);
+                    razones.set(idx, ratio);
+                }
+            });
+
+            if (reactantes.length === 0) {
+                return { validatedSet: validado, mensajes };
+            }
+
+            const noAislados = reactantes.filter(idx => !validado.has(idx));
+
+            if (noAislados.length === 0 && validado.size > 0) {
+                let mejor = null;
+                validado.forEach((idx) => {
+                    if (!razones.has(idx)) {
+                        return;
+                    }
+                    const ratio = razones.get(idx);
+                    if (!mejor || ratio > mejor.ratio) {
+                        mejor = { idx, ratio };
+                    }
+                });
+                validado.forEach((idx) => {
+                    if (!mejor || idx === mejor.idx) {
+                        return;
+                    }
+                    validado.delete(idx);
+                });
+                if (mejor && validado.size === reactantes.length) {
+                    validado.delete(mejor.idx);
+                    mensajes.push('No es posible aislar todos los reactivos. Se desmarcaron todas las especies para mantener al menos un reactivo no aislado.');
+                } else if (mejor) {
+                    mensajes.push(`No es posible aislar todos los reactivos. Solo se mantiene aislada la Especie ${mejor.idx + 1}.`);
+                } else {
+                    mensajes.push('No es posible aislar todos los reactivos. Se desmarcaron las selecciones.');
+                    validado.clear();
+                }
+                return { validatedSet: validado, mensajes };
+            }
+
+            if (noAislados.length > 0) {
+                const Rmin = Math.min(...noAislados.map(idx => razones.get(idx) ?? Infinity));
+                const especiesInvalidas = [];
+                validado.forEach((idx) => {
+                    if (!razones.has(idx)) {
+                        return;
+                    }
+                    const ratio = razones.get(idx);
+                    if (ratio < 10 * Rmin) {
+                        validado.delete(idx);
+                        especiesInvalidas.push(`Especie ${idx + 1}`);
+                    }
+                });
+                if (especiesInvalidas.length > 0) {
+                    mensajes.push(`Las siguientes especies no cumplen la condición 10:1 y fueron desmarcadas: ${especiesInvalidas.join(', ')}. Se requiere R_i ≥ 10 × R_min.`);
+                }
+            }
+
+            return { validatedSet: validado, mensajes };
+        }
+
+        // === Isolation & limiting-reactant stop rule ===
+        function buildIsolationSetValidated(coeficientes, concentraciones, opciones = {}) {
+            const aislamientoActual = getCheckedIsolationSet();
+            const { validatedSet, mensajes } = validateIsolation(coeficientes, concentraciones, aislamientoActual);
+
+            document.querySelectorAll('.cbIsolation').forEach((checkbox) => {
+                const idx = parseInt(checkbox.dataset.idx, 10);
+                checkbox.checked = validatedSet.has(idx);
+            });
+
+            if (mensajes.length > 0 && !opciones.silencioso) {
+                alert(mensajes.join('\n'));
+            }
+
+            return validatedSet;
+        }
+
+        // === Isolation & limiting-reactant stop rule ===
+        function manejarCambioIsolation(opciones = {}) {
+            const { concentraciones, coeficientes } = obtenerParametrosReactivos();
+            buildIsolationSetValidated(coeficientes, concentraciones, opciones);
+        }
+
         // Actualiza el formulario según el número de reactivos
         function actualizarFormulario() {
-            const numReactivos = document.getElementById('numReactivos').value;
+            // === Isolation & limiting-reactant stop rule ===
+            const numReactivos = parseInt(document.getElementById('numReactivos').value, 10) || 0;
             const reactivosForm = document.getElementById('reactivosForm');
             const reactivoBaseSelect = document.getElementById('reactivoBase');
             reactivosForm.innerHTML = '';
             reactivoBaseSelect.innerHTML = '';
 
+            const tabla = document.createElement('table');
+            tabla.className = 'species-table';
+
+            const thead = document.createElement('thead');
+            thead.innerHTML = '<tr><th>Especie</th><th>Orden</th><th>[A]<sub>0</sub></th><th>ν</th><th>Isolation</th></tr>';
+            tabla.appendChild(thead);
+
+            const tbody = document.createElement('tbody');
+
             for (let i = 0; i < numReactivos; i++) {
-                reactivosForm.innerHTML += `
-                    <div class="form-group">
-                        <label>Orden del reactivo ${i + 1}:</label>
-                        <input type="number" id="orden${i}" value="1" step="0.1">
-                    </div>
-                    <div class="form-group">
-                        <label>Concentración inicial [A<sub>${i + 1}</sub>]<sub>0</sub>:</label>
-                        <input type="number" id="C0${i}" value="1" step="0.1">
-                    </div>
-                    <div class="form-group">
-                        <label>Coeficiente estequiométrico ν<sub>${i + 1}</sub>:</label>
-                        <input type="number" id="stoich${i}" value="-1" step="0.1">
-                    </div>
-                `;
+                const fila = document.createElement('tr');
+
+                const celdaNombre = document.createElement('td');
+                celdaNombre.textContent = `Especie ${i + 1}`;
+                fila.appendChild(celdaNombre);
+
+                const celdaOrden = document.createElement('td');
+                const inputOrden = document.createElement('input');
+                inputOrden.type = 'number';
+                inputOrden.id = `orden${i}`;
+                inputOrden.value = '1';
+                inputOrden.step = '0.1';
+                inputOrden.addEventListener('input', () => manejarCambioIsolation({ silencioso: true }));
+                celdaOrden.appendChild(inputOrden);
+                fila.appendChild(celdaOrden);
+
+                const celdaConcentracion = document.createElement('td');
+                const inputConcentracion = document.createElement('input');
+                inputConcentracion.type = 'number';
+                inputConcentracion.id = `C0${i}`;
+                inputConcentracion.value = '1';
+                inputConcentracion.step = '0.1';
+                inputConcentracion.addEventListener('input', () => manejarCambioIsolation({ silencioso: true }));
+                celdaConcentracion.appendChild(inputConcentracion);
+                fila.appendChild(celdaConcentracion);
+
+                const celdaStoich = document.createElement('td');
+                const inputStoich = document.createElement('input');
+                inputStoich.type = 'number';
+                inputStoich.id = `stoich${i}`;
+                inputStoich.value = '-1';
+                inputStoich.step = '0.1';
+                inputStoich.addEventListener('input', () => manejarCambioIsolation({ silencioso: true }));
+                celdaStoich.appendChild(inputStoich);
+                fila.appendChild(celdaStoich);
+
+                const celdaIsolation = document.createElement('td');
+                const checkboxIsolation = document.createElement('input');
+                checkboxIsolation.type = 'checkbox';
+                checkboxIsolation.className = 'cbIsolation';
+                checkboxIsolation.dataset.idx = i;
+                checkboxIsolation.addEventListener('change', () => manejarCambioIsolation());
+                celdaIsolation.appendChild(checkboxIsolation);
+                fila.appendChild(celdaIsolation);
+
+                tbody.appendChild(fila);
+
                 reactivoBaseSelect.innerHTML += `<option value="${i}">Especie ${i + 1}</option>`;
             }
+
+            tabla.appendChild(tbody);
+            reactivosForm.appendChild(tabla);
+
+            manejarCambioIsolation();
         }
 
         // Función para resolver las ecuaciones y graficar los resultados
@@ -265,6 +470,7 @@
             const numPuntos = parseInt(document.getElementById('numPuntos').value, 10);
             const forzarNoNegativas = document.getElementById('forzarNoNegativas').checked;
             const autoTiempo = document.getElementById('tiempoAutomatico').checked;
+            const usarSalvaguardaDerivada = document.getElementById('salvaguardaDerivada').checked; // === Isolation & limiting-reactant stop rule ===
 
             if (isNaN(numPuntos) || numPuntos < 1) {
                 alert('El número de puntos de cálculo debe ser un entero positivo.');
@@ -289,6 +495,9 @@
                 concentracionesIniciales.push(concentracionInicial);
                 coeficientesEstequiometricos.push(coeficiente);
             }
+
+            const concentracionesInicialesCopia = concentracionesIniciales.slice(); // === Isolation & limiting-reactant stop rule ===
+            const especiesConstantes = buildIsolationSetValidated(coeficientesEstequiometricos, concentracionesIniciales); // === Isolation & limiting-reactant stop rule ===
 
             // Conversión de unidades de la constante de velocidad
             let kConvertido = k;
@@ -324,12 +533,15 @@
                 .map((coef, idx) => ({ coef, idx }))
                 .filter(item => item.coef < 0);
 
-            // Determinar el reactivo limitante comparando C0_i / |nu_i|
+            const reactivosNoAislados = reactivosEstequiometricos.filter(item => !especiesConstantes.has(item.idx)); // === Isolation & limiting-reactant stop rule ===
+            const fraccionRestanteLimitante = 1e-3; // === Isolation & limiting-reactant stop rule ===
+            const umbralAbsolutoLimitante = 1e-9; // === Isolation & limiting-reactant stop rule ===
+
             let infoReactivoLimitante = null;
-            if (reactivosEstequiometricos.length > 0) {
-                infoReactivoLimitante = reactivosEstequiometricos.reduce((limitante, item) => {
+            if (reactivosNoAislados.length > 0) {
+                infoReactivoLimitante = reactivosNoAislados.reduce((limitante, item) => {
                     const coefAbs = Math.abs(item.coef);
-                    const concentracionInicial = Math.max(concentracionesIniciales[item.idx], 0);
+                    const concentracionInicial = Math.max(concentracionesInicialesCopia[item.idx], 0);
                     const ratio = coefAbs > 0 ? concentracionInicial / coefAbs : Infinity;
 
                     if (!limitante || ratio < limitante.ratio) {
@@ -344,22 +556,66 @@
                 }, null);
 
                 if (infoReactivoLimitante) {
-                    infoReactivoLimitante.umbralRelativo = infoReactivoLimitante.concentracionInicial * 0.001;
-                    infoReactivoLimitante.umbralAbsoluto = 1e-9;
-                    // El umbral efectivo es el mayor de los criterios para detenerse cuanto antes
-                    infoReactivoLimitante.umbralDetencion = Math.max(
-                        infoReactivoLimitante.umbralRelativo,
-                        infoReactivoLimitante.umbralAbsoluto
-                    );
+                    infoReactivoLimitante.umbralRelativo = infoReactivoLimitante.concentracionInicial * fraccionRestanteLimitante;
+                    infoReactivoLimitante.umbralAbsoluto = umbralAbsolutoLimitante;
+                    infoReactivoLimitante.fraccionRestante = fraccionRestanteLimitante;
                 }
             }
 
             let conversionLimitante = null;
+            let razonDetencion = null; // === Isolation & limiting-reactant stop rule ===
 
             const calcularDerivadas = (estado) => {
-                const producto = estado.reduce((acc, C, idx) => acc * Math.pow(Math.max(C, 0), ordenes[idx]), 1);
+                // === Isolation & limiting-reactant stop rule ===
+                const concentracionesEfectivas = estado.map((valor, idx) => {
+                    if (especiesConstantes.has(idx)) {
+                        return Math.max(concentracionesInicialesCopia[idx], 0);
+                    }
+                    return Math.max(valor, 0);
+                });
+                const producto = concentracionesEfectivas.reduce((acc, C, idx) => acc * Math.pow(C, ordenes[idx]), 1);
                 const velocidad = kConvertido * producto;
-                return estado.map((_, idx) => coeficientesEstequiometricos[idx] * velocidad);
+                return estado.map((_, idx) => {
+                    if (especiesConstantes.has(idx)) {
+                        return 0;
+                    }
+                    return coeficientesEstequiometricos[idx] * velocidad;
+                });
+            };
+
+            const evaluarCriteriosLimite = (estado, derivadasLocales) => {
+                // === Isolation & limiting-reactant stop rule ===
+                if (!infoReactivoLimitante) {
+                    return { detener: false };
+                }
+                const indice = infoReactivoLimitante.idx;
+                const concentracion = Math.max(estado[indice], 0);
+                const umbralRelativo = infoReactivoLimitante.umbralRelativo;
+                const umbralAbsoluto = infoReactivoLimitante.umbralAbsoluto;
+                const derivadaAbs = Math.abs(derivadasLocales[indice] || 0);
+
+                let razon = null;
+                if (concentracion <= umbralRelativo) {
+                    razon = '99.9% conversion';
+                } else if (concentracion <= umbralAbsoluto) {
+                    razon = 'Absolute safety floor';
+                } else if (usarSalvaguardaDerivada && derivadaAbs <= 1e-12) {
+                    razon = 'Derivative safeguard';
+                }
+
+                if (!razon) {
+                    return { detener: false };
+                }
+
+                let conversion = 0;
+                if (infoReactivoLimitante.concentracionInicial > 0) {
+                    conversion = (1 - (concentracion / infoReactivoLimitante.concentracionInicial)) * 100;
+                } else {
+                    conversion = concentracion === 0 ? 100 : 0;
+                }
+                conversion = Math.max(0, Math.min(100, conversion));
+
+                return { detener: true, razon, conversion };
             };
 
             const aplicarForzado = (estado) => {
@@ -374,8 +630,13 @@
             concentraciones.push(estadoActual.slice());
 
             if (autoTiempo) {
+                // === Isolation & limiting-reactant stop rule ===
                 if (!infoReactivoLimitante) {
-                    alert('Debe definir al menos un reactivo con coeficiente estequiométrico negativo para identificar el reactivo limitante.');
+                    if (reactivosEstequiometricos.length > 0 && reactivosNoAislados.length === 0) {
+                        alert('Todos los reactivos han sido marcados como aislados. Debe dejar al menos un reactivo no aislado para determinar el reactivo limitante.');
+                    } else {
+                        alert('Debe definir al menos un reactivo con coeficiente estequiométrico negativo para identificar el reactivo limitante.');
+                    }
                     return;
                 }
 
@@ -385,17 +646,16 @@
                 let iteracion = 0;
                 let finalizadoAutomaticamente = false;
 
-                if (
-                    infoReactivoLimitante.concentracionInicial <= infoReactivoLimitante.umbralDetencion ||
-                    infoReactivoLimitante.concentracionInicial <= infoReactivoLimitante.umbralAbsoluto
-                ) {
-                    finalizadoAutomaticamente = true;
+                let derivadas = calcularDerivadas(estadoActual);
+                let evaluacion = evaluarCriteriosLimite(estadoActual, derivadas); // === Isolation & limiting-reactant stop rule ===
+                if (evaluacion.detener) {
+                    conversionLimitante = evaluacion.conversion;
+                    razonDetencion = evaluacion.razon;
                     tiempoFinalSegundos = tiempoActual;
+                    finalizadoAutomaticamente = true;
                 }
 
-                while (iteracion < maxIteraciones) {
-                    const derivadas = calcularDerivadas(estadoActual);
-
+                while (!finalizadoAutomaticamente && iteracion < maxIteraciones) {
                     const tiemposHastaCero = indicesReactivos.map(({ idx }) => {
                         const derivada = derivadas[idx];
                         if (derivada >= 0) return Infinity;
@@ -406,34 +666,6 @@
                     const minimoTiempoHastaCero = Math.min(...tiemposHastaCero);
 
                     if (!isFinite(minimoTiempoHastaCero) || minimoTiempoHastaCero === Infinity) {
-                        // No hay consumo de reactivos, finaliza para evitar bucles infinitos
-                        break;
-                    }
-
-                    if (minimoTiempoHastaCero <= tolerancia) {
-                        const concentracionLimitanteActual = Math.max(estadoActual[infoReactivoLimitante.idx], 0);
-                        const derivadaLimitanteActual = Math.abs(derivadas[infoReactivoLimitante.idx]);
-
-                        if (infoReactivoLimitante.concentracionInicial > 0) {
-                            conversionLimitante = Math.min(
-                                100,
-                                Math.max(
-                                    0,
-                                    (1 - (concentracionLimitanteActual / infoReactivoLimitante.concentracionInicial)) * 100
-                                )
-                            );
-                        } else {
-                            conversionLimitante = concentracionLimitanteActual === 0 ? 100 : 0;
-                        }
-
-                        if (
-                            concentracionLimitanteActual <= infoReactivoLimitante.umbralDetencion ||
-                            concentracionLimitanteActual <= infoReactivoLimitante.umbralAbsoluto ||
-                            derivadaLimitanteActual <= 1e-12
-                        ) {
-                            tiempoFinalSegundos = tiempoActual;
-                            finalizadoAutomaticamente = true;
-                        }
                         break;
                     }
 
@@ -458,30 +690,13 @@
                     tiempos.push(tiempoActual);
                     concentraciones.push(siguienteEstado.slice());
                     estadoActual = siguienteEstado;
+                    derivadas = calcularDerivadas(estadoActual);
                     iteracion++;
 
-                    const concentracionLimitante = Math.max(estadoActual[infoReactivoLimitante.idx], 0);
-                    const derivadaLimitante = Math.abs(derivadas[infoReactivoLimitante.idx]);
-
-                    if (infoReactivoLimitante.concentracionInicial > 0) {
-                        conversionLimitante = Math.min(
-                            100,
-                            Math.max(
-                                0,
-                                (1 - (concentracionLimitante / infoReactivoLimitante.concentracionInicial)) * 100
-                            )
-                        );
-                    } else {
-                        conversionLimitante = concentracionLimitante === 0 ? 100 : 0;
-                    }
-
-                    // Finalizar cuando el reactivo limitante alcanza el 99.9% de conversión,
-                    // queda por debajo del umbral absoluto o su derivada se vuelve casi nula.
-                    if (
-                        concentracionLimitante <= infoReactivoLimitante.umbralDetencion ||
-                        concentracionLimitante <= infoReactivoLimitante.umbralAbsoluto ||
-                        derivadaLimitante <= 1e-12
-                    ) {
+                    evaluacion = evaluarCriteriosLimite(estadoActual, derivadas);
+                    if (evaluacion.detener) {
+                        conversionLimitante = evaluacion.conversion;
+                        razonDetencion = evaluacion.razon;
                         tiempoFinalSegundos = tiempoActual;
                         finalizadoAutomaticamente = true;
                         break;
@@ -544,8 +759,22 @@
                 } else {
                     conversionLimitante = concentracionFinalLimitante === 0 ? 100 : 0;
                 }
+            }
 
-                alert(`Reactivo limitante: Especie ${infoReactivoLimitante.idx + 1}. Conversión alcanzada: ${conversionLimitante.toFixed(4)}%.`);
+            if (!razonDetencion) {
+                razonDetencion = autoTiempo ? 'Integration completed' : 'User-defined final time'; // === Isolation & limiting-reactant stop rule ===
+            }
+
+            const aislamientoLista = Array.from(especiesConstantes).sort((a, b) => a - b).map(idx => `Especie ${idx + 1}`); // === Isolation & limiting-reactant stop rule ===
+            const aislamientoTexto = aislamientoLista.length > 0 ? aislamientoLista.join(', ') : 'None'; // === Isolation & limiting-reactant stop rule ===
+            const statusElement = document.getElementById('limitingStatus'); // === Isolation & limiting-reactant stop rule ===
+            if (statusElement) {
+                if (infoReactivoLimitante) {
+                    const conversionTexto = conversionLimitante !== null ? conversionLimitante.toFixed(4) : 'N/A';
+                    statusElement.textContent = `Limiting reactant: Especie ${infoReactivoLimitante.idx + 1}. Final conversion: ${conversionTexto}%. Stop reason: ${razonDetencion}. Isolation set: [${aislamientoTexto}].`;
+                } else {
+                    statusElement.textContent = `Limiting reactant: N/A. Final conversion: N/A. Stop reason: ${razonDetencion}. Isolation set: [${aislamientoTexto}].`;
+                }
             }
 
             // Extraer las concentraciones del reactivo seleccionado
@@ -603,6 +832,10 @@
             if (grafica) grafica.destroy();  // Destruir la gráfica actual
             document.getElementById('grafica').getContext('2d').clearRect(0, 0, 400, 400);  // Limpiar el canvas
             resultados = [];  // Borrar los resultados
+            const statusElement = document.getElementById('limitingStatus'); // === Isolation & limiting-reactant stop rule ===
+            if (statusElement) {
+                statusElement.textContent = '';
+            }
         }
 
         // Función para descargar los resultados como un archivo CSV
