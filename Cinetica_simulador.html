@@ -139,7 +139,7 @@
             </div>
 
             <div class="form-group">
-                <label for="reactivoBase">Reactivo para representar:</label>
+                <label for="reactivoBase">Especie para representar:</label>
                 <select id="reactivoBase"></select>
             </div>
 
@@ -205,8 +205,12 @@
                         <label>Concentración inicial [A<sub>${i + 1}</sub>]<sub>0</sub>:</label>
                         <input type="number" id="C0${i}" value="1" step="0.1">
                     </div>
+                    <div class="form-group">
+                        <label>Coeficiente estequiométrico ν<sub>${i + 1}</sub>:</label>
+                        <input type="number" id="stoich${i}" value="-1" step="0.1">
+                    </div>
                 `;
-                reactivoBaseSelect.innerHTML += `<option value="${i}">Reactivo ${i + 1}</option>`;
+                reactivoBaseSelect.innerHTML += `<option value="${i}">Especie ${i + 1}</option>`;
             }
         }
 
@@ -230,10 +234,21 @@
 
             let ordenes = [];
             let concentracionesIniciales = [];
+            let coeficientesEstequiometricos = [];
 
             for (let i = 0; i < numReactivos; i++) {
-                ordenes.push(parseFloat(document.getElementById(`orden${i}`).value));
-                concentracionesIniciales.push(parseFloat(document.getElementById(`C0${i}`).value));
+                const orden = parseFloat(document.getElementById(`orden${i}`).value);
+                const concentracionInicial = parseFloat(document.getElementById(`C0${i}`).value);
+                const coeficiente = parseFloat(document.getElementById(`stoich${i}`).value);
+
+                if (isNaN(orden) || isNaN(concentracionInicial) || isNaN(coeficiente)) {
+                    alert(`Todos los parámetros del reactivo ${i + 1} deben ser valores numéricos.`);
+                    return;
+                }
+
+                ordenes.push(orden);
+                concentracionesIniciales.push(concentracionInicial);
+                coeficientesEstequiometricos.push(coeficiente);
             }
 
             // Conversión de unidades de la constante de velocidad
@@ -260,8 +275,8 @@
 
             const calcularDerivadas = (estado) => {
                 const producto = estado.reduce((acc, C, idx) => acc * Math.pow(Math.max(C, 0), ordenes[idx]), 1);
-                const dCdt = -kConvertido * producto;
-                return estado.map(() => dCdt);
+                const velocidad = kConvertido * producto;
+                return estado.map((_, idx) => coeficientesEstequiometricos[idx] * velocidad);
             };
 
             const aplicarForzado = (estado) => {
@@ -318,7 +333,7 @@
                 data: {
                     labels: tiempos.map(time => time.toFixed(2)), // Redondear los valores de tiempo a 2 decimales
                     datasets: [{
-                        label: `Concentración del Reactivo ${reactivoBase + 1} (${unidadConcentracion})`,
+                        label: `Concentración de la Especie ${reactivoBase + 1} (${unidadConcentracion})`,
                         data: concentracionReactivoBase,
                         borderColor: 'rgba(75, 192, 192, 1)',
                         fill: false,
