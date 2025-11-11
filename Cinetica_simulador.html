@@ -60,6 +60,18 @@
             flex: 1;
             margin-right: 10px;
         }
+        .species-group {
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 12px;
+            background-color: #fafafa;
+        }
+        .species-group h3 {
+            margin: 0 0 8px 0;
+            font-size: 16px;
+            color: #333;
+        }
         .form-group input, .form-group select {
             flex: 2;
         }
@@ -95,8 +107,18 @@
             <h1>Simulador de Cinética Química</h1>
 
             <div class="form-group">
-                <label for="numReactivos">Número de reactivos:</label>
+                <label for="numReactivos">Número de especies:</label>
                 <input type="number" id="numReactivos" value="1" min="1" onchange="actualizarFormulario()">
+            </div>
+
+            <div class="form-group">
+                <label for="plantillaKinetica">Plantilla de cinética:</label>
+                <select id="plantillaKinetica" onchange="aplicarPlantilla()">
+                    <option value="custom" selected>Personalizada</option>
+                    <option value="firstOrder">Primer orden: A → B</option>
+                    <option value="dimerization">Dimerización: 2A → B</option>
+                    <option value="bimolecular">Bimolecular: A + B → C</option>
+                </select>
             </div>
 
             <div id="reactivosForm"></div>
@@ -104,6 +126,16 @@
             <div class="form-group">
                 <label for="k">Constante de velocidad (k):</label>
                 <input type="number" id="k" value="0.6" step="0.01">
+            </div>
+
+            <div class="form-group">
+                <label for="reaccionReversible">Reacción reversible:</label>
+                <input type="checkbox" id="reaccionReversible" onchange="toggleReversible()">
+            </div>
+
+            <div class="form-group" id="grupoKReversa" style="display: none;">
+                <label for="kReversa">Constante de velocidad inversa (k<sub>r</sub>):</label>
+                <input type="number" id="kReversa" value="0.1" step="0.01">
             </div>
 
             <div class="form-group">
@@ -139,7 +171,7 @@
             </div>
 
             <div class="form-group">
-                <label for="reactivoBase">Reactivo para representar:</label>
+                <label for="reactivoBase">Especie destacada en la gráfica:</label>
                 <select id="reactivoBase"></select>
             </div>
 
@@ -186,54 +218,234 @@
     <script>
         let grafica;  // Variable para la gráfica
         let resultados = [];  // Almacenar resultados para CSV
+        let nombresEspecies = [];  // Guardar los nombres para la gráfica y el CSV
 
-        // Actualiza el formulario según el número de reactivos
+        // Actualiza el formulario según el número de especies
         function actualizarFormulario() {
-            const numReactivos = document.getElementById('numReactivos').value;
+            let numReactivos = parseInt(document.getElementById('numReactivos').value, 10);
+            if (isNaN(numReactivos) || numReactivos < 1) {
+                numReactivos = 1;
+                document.getElementById('numReactivos').value = numReactivos;
+            }
             const reactivosForm = document.getElementById('reactivosForm');
-            const reactivoBaseSelect = document.getElementById('reactivoBase');
+
+            const datosPrevios = [];
+            for (let i = 0; i < 200; i++) {
+                const nombre = document.getElementById(`nombre${i}`);
+                const orden = document.getElementById(`orden${i}`);
+                const nu = document.getElementById(`nu${i}`);
+                const c0 = document.getElementById(`C0${i}`);
+                if (!nombre || !orden || !nu || !c0) break;
+                datosPrevios.push({
+                    nombre: nombre.value,
+                    orden: orden.value,
+                    nu: nu.value,
+                    c0: c0.value
+                });
+            }
+
             reactivosForm.innerHTML = '';
+
+            for (let i = 0; i < numReactivos; i++) {
+                const prev = datosPrevios[i] || {};
+                const nombrePorDefecto = `Especie ${i + 1}`;
+                const ordenPorDefecto = i === numReactivos - 1 ? 0 : 1;
+                let nuPorDefecto = 0;
+                if (numReactivos === 1) {
+                    nuPorDefecto = -1;
+                } else if (i === 0) {
+                    nuPorDefecto = -1;
+                } else if (i === numReactivos - 1) {
+                    nuPorDefecto = 1;
+                }
+                const c0PorDefecto = i === 0 ? 1 : 0;
+
+                reactivosForm.innerHTML += `
+                    <div class="species-group">
+                        <h3 id="especieTitulo${i}">${prev.nombre || nombrePorDefecto}</h3>
+                        <div class="form-group">
+                            <label>Nombre de la especie ${i + 1}:</label>
+                            <input type="text" id="nombre${i}" value="${prev.nombre || nombrePorDefecto}" oninput="actualizarOpcionesReactivoBase();actualizarTituloEspecie(${i});">
+                        </div>
+                        <div class="form-group">
+                            <label>Orden de la especie ${i + 1}:</label>
+                            <input type="number" id="orden${i}" value="${prev.orden || ordenPorDefecto}" step="0.1" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Coeficiente estequiométrico ν${i + 1}:</label>
+                            <input type="number" id="nu${i}" value="${prev.nu || nuPorDefecto}" step="0.1">
+                        </div>
+                        <div class="form-group">
+                            <label>Concentración inicial [C<sub>${i + 1}</sub>]<sub>0</sub>:</label>
+                            <input type="number" id="C0${i}" value="${prev.c0 || c0PorDefecto}" step="0.1">
+                        </div>
+                    </div>
+                `;
+            }
+
+            actualizarOpcionesReactivoBase();
+        }
+
+        function actualizarOpcionesReactivoBase() {
+            let numReactivos = parseInt(document.getElementById('numReactivos').value, 10);
+            if (isNaN(numReactivos) || numReactivos < 1) {
+                numReactivos = 1;
+                document.getElementById('numReactivos').value = numReactivos;
+            }
+            const reactivoBaseSelect = document.getElementById('reactivoBase');
+            if (!reactivoBaseSelect) return;
+            const valorAnterior = reactivoBaseSelect.value;
             reactivoBaseSelect.innerHTML = '';
 
             for (let i = 0; i < numReactivos; i++) {
-                reactivosForm.innerHTML += `
-                    <div class="form-group">
-                        <label>Orden del reactivo ${i + 1}:</label>
-                        <input type="number" id="orden${i}" value="1" step="0.1">
-                    </div>
-                    <div class="form-group">
-                        <label>Concentración inicial [A<sub>${i + 1}</sub>]<sub>0</sub>:</label>
-                        <input type="number" id="C0${i}" value="1" step="0.1">
-                    </div>
-                `;
-                reactivoBaseSelect.innerHTML += `<option value="${i}">Reactivo ${i + 1}</option>`;
+                const nombreInput = document.getElementById(`nombre${i}`);
+                const nombre = nombreInput && nombreInput.value ? nombreInput.value : `Especie ${i + 1}`;
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = nombre;
+                reactivoBaseSelect.appendChild(option);
             }
+
+            if (numReactivos > 0) {
+                const indiceAnterior = parseInt(valorAnterior, 10);
+                if (!isNaN(indiceAnterior) && indiceAnterior < numReactivos) {
+                    reactivoBaseSelect.value = valorAnterior;
+                } else {
+                    reactivoBaseSelect.value = '0';
+                }
+            }
+        }
+
+        function actualizarTituloEspecie(indice) {
+            const titulo = document.getElementById(`especieTitulo${indice}`);
+            const nombreInput = document.getElementById(`nombre${indice}`);
+            if (titulo && nombreInput) {
+                const nombre = nombreInput.value || `Especie ${indice + 1}`;
+                titulo.textContent = nombre;
+            }
+        }
+
+        function toggleReversible() {
+            const grupo = document.getElementById('grupoKReversa');
+            const reversible = document.getElementById('reaccionReversible').checked;
+            if (grupo) {
+                grupo.style.display = reversible ? 'flex' : 'none';
+            }
+        }
+
+        function aplicarPlantilla() {
+            const plantilla = document.getElementById('plantillaKinetica').value;
+            if (plantilla === 'custom') return;
+
+            const configuraciones = {
+                firstOrder: {
+                    especies: [
+                        { nombre: 'A', orden: 1, nu: -1, c0: 1 },
+                        { nombre: 'B', orden: 0, nu: 1, c0: 0 }
+                    ],
+                    k: 0.6,
+                    reversible: false
+                },
+                dimerization: {
+                    especies: [
+                        { nombre: 'A', orden: 2, nu: -2, c0: 1 },
+                        { nombre: 'B', orden: 0, nu: 1, c0: 0 }
+                    ],
+                    k: 0.5,
+                    reversible: false
+                },
+                bimolecular: {
+                    especies: [
+                        { nombre: 'A', orden: 1, nu: -1, c0: 1 },
+                        { nombre: 'B', orden: 1, nu: -1, c0: 1 },
+                        { nombre: 'C', orden: 0, nu: 1, c0: 0 }
+                    ],
+                    k: 0.4,
+                    reversible: false
+                }
+            };
+
+            const seleccion = configuraciones[plantilla];
+            if (!seleccion) return;
+
+            document.getElementById('numReactivos').value = seleccion.especies.length;
+            actualizarFormulario();
+
+            seleccion.especies.forEach((especie, idx) => {
+                document.getElementById(`nombre${idx}`).value = especie.nombre;
+                document.getElementById(`orden${idx}`).value = especie.orden;
+                document.getElementById(`nu${idx}`).value = especie.nu;
+                document.getElementById(`C0${idx}`).value = especie.c0;
+                actualizarTituloEspecie(idx);
+            });
+
+            if (typeof seleccion.k !== 'undefined') {
+                document.getElementById('k').value = seleccion.k;
+            }
+
+            document.getElementById('reaccionReversible').checked = !!seleccion.reversible;
+            toggleReversible();
+            actualizarOpcionesReactivoBase();
         }
 
         // Función para resolver las ecuaciones y graficar los resultados
         function simular() {
-            const numReactivos = parseInt(document.getElementById('numReactivos').value, 10);
+            let numReactivos = parseInt(document.getElementById('numReactivos').value, 10);
+            if (isNaN(numReactivos) || numReactivos < 1) {
+                numReactivos = 1;
+                document.getElementById('numReactivos').value = numReactivos;
+                actualizarFormulario();
+            }
             const k = parseFloat(document.getElementById('k').value);
             const unidadVelocidad = document.getElementById('unidadVelocidad').value;
             const tiempoFinal = parseFloat(document.getElementById('tiempoFinal').value);
             const unidadTiempo = document.getElementById('unidadTiempo').value;
             const unidadConcentracion = document.getElementById('unidadConcentracion').value;
-            const reactivoBase = parseInt(document.getElementById('reactivoBase').value);
+            const reactivoBase = parseInt(document.getElementById('reactivoBase').value, 10) || 0;
             const metodoIntegracion = document.getElementById('metodoIntegracion').value;
             const numPuntos = parseInt(document.getElementById('numPuntos').value, 10);
             const forzarNoNegativas = document.getElementById('forzarNoNegativas').checked;
+            const reversible = document.getElementById('reaccionReversible').checked;
+            const kReversaInput = document.getElementById('kReversa');
 
             if (isNaN(numPuntos) || numPuntos < 1) {
                 alert('El número de puntos de cálculo debe ser un entero positivo.');
                 return;
             }
 
+            if (isNaN(k) || k < 0) {
+                alert('La constante de velocidad debe ser un número mayor o igual que cero.');
+                return;
+            }
+
             let ordenes = [];
             let concentracionesIniciales = [];
+            let coeficientesEstequiometricos = [];
+            nombresEspecies = [];
 
             for (let i = 0; i < numReactivos; i++) {
-                ordenes.push(parseFloat(document.getElementById(`orden${i}`).value));
-                concentracionesIniciales.push(parseFloat(document.getElementById(`C0${i}`).value));
+                const orden = parseFloat(document.getElementById(`orden${i}`).value);
+                const concentracion = parseFloat(document.getElementById(`C0${i}`).value);
+                const nu = parseFloat(document.getElementById(`nu${i}`).value);
+                const nombre = document.getElementById(`nombre${i}`).value || `Especie ${i + 1}`;
+
+                if (isNaN(orden) || orden < 0) {
+                    alert(`El orden de la especie ${nombre} debe ser un número mayor o igual que cero.`);
+                    return;
+                }
+                if (isNaN(concentracion)) {
+                    alert(`La concentración inicial de la especie ${nombre} no es válida.`);
+                    return;
+                }
+                if (isNaN(nu)) {
+                    alert(`El coeficiente estequiométrico de la especie ${nombre} no es válido.`);
+                    return;
+                }
+
+                ordenes.push(orden);
+                concentracionesIniciales.push(concentracion);
+                coeficientesEstequiometricos.push(nu);
+                nombresEspecies.push(nombre);
             }
 
             // Conversión de unidades de la constante de velocidad
@@ -244,6 +456,22 @@
                 kConvertido = k / 3600;  // Convertir de 1/horas a 1/segundos
             }
 
+            let kReversaConvertido = 0;
+            if (reversible && kReversaInput) {
+                const kReversaValor = parseFloat(kReversaInput.value);
+                if (isNaN(kReversaValor) || kReversaValor < 0) {
+                    alert('La constante de velocidad inversa debe ser un número mayor o igual que cero.');
+                    return;
+                }
+                if (unidadVelocidad === 'min') {
+                    kReversaConvertido = kReversaValor / 60;
+                } else if (unidadVelocidad === 'h') {
+                    kReversaConvertido = kReversaValor / 3600;
+                } else {
+                    kReversaConvertido = kReversaValor;
+                }
+            }
+
             // Conversión de tiempo de reacción a segundos
             let tiempoFinalSegundos = tiempoFinal;
             if (unidadTiempo === 'min') {
@@ -252,16 +480,26 @@
                 tiempoFinalSegundos = tiempoFinal * 3600;  // Convertir de horas a segundos
             }
 
-            // Resolver ecuaciones diferenciales para cada reactivo usando el método seleccionado
+            // Resolver ecuaciones diferenciales para cada especie usando el método seleccionado
             const pasos = Math.max(numPuntos, 1);
             const dt = tiempoFinalSegundos / pasos;
             let tiempos = [];
             let concentraciones = [];
 
+            const ordenesReversos = coeficientesEstequiometricos.map(nu => (nu > 0 ? Math.abs(nu) : 0));
+
             const calcularDerivadas = (estado) => {
-                const producto = estado.reduce((acc, C, idx) => acc * Math.pow(Math.max(C, 0), ordenes[idx]), 1);
-                const dCdt = -kConvertido * producto;
-                return estado.map(() => dCdt);
+                const productoDirecto = estado.reduce((acc, C, idx) => acc * Math.pow(Math.max(C, 0), Math.max(ordenes[idx], 0)), 1);
+                const velocidadDirecta = kConvertido * productoDirecto;
+
+                let velocidadInversa = 0;
+                if (reversible) {
+                    const productoInverso = estado.reduce((acc, C, idx) => acc * Math.pow(Math.max(C, 0), Math.max(ordenesReversos[idx], 0)), 1);
+                    velocidadInversa = kReversaConvertido * productoInverso;
+                }
+
+                const velocidadNeta = velocidadDirecta - velocidadInversa;
+                return estado.map((_, idx) => coeficientesEstequiometricos[idx] * velocidadNeta);
             };
 
             const aplicarForzado = (estado) => {
@@ -297,9 +535,6 @@
                 estadoActual = siguienteEstado;
             }
 
-            // Extraer las concentraciones del reactivo seleccionado
-            let concentracionReactivoBase = concentraciones.map(c => c[reactivoBase]);
-
             // Convertir el vector de tiempo de vuelta a la unidad seleccionada por el usuario
             if (unidadTiempo === 'min') {
                 tiempos = tiempos.map(tiempo => tiempo / 60);  // Convertir de segundos a minutos
@@ -313,24 +548,45 @@
             // Graficar los resultados
             const ctx = document.getElementById('grafica').getContext('2d');
             if (grafica) grafica.destroy();  // Destruir la gráfica anterior si existe
+
+            const colores = [
+                'rgba(75, 192, 192, 1)',
+                'rgba(255, 99, 132, 1)',
+                'rgba(255, 206, 86, 1)',
+                'rgba(54, 162, 235, 1)',
+                'rgba(153, 102, 255, 1)',
+                'rgba(255, 159, 64, 1)',
+                'rgba(99, 255, 132, 1)'
+            ];
+
+            const datasets = concentraciones[0].map((_, idx) => ({
+                label: `${nombresEspecies[idx]} (${unidadConcentracion})`,
+                data: concentraciones.map(c => c[idx]),
+                borderColor: colores[idx % colores.length],
+                borderWidth: idx === reactivoBase ? 3 : 1.5,
+                borderDash: idx === reactivoBase ? [] : [5, 3],
+                fill: false,
+                tension: 0.2
+            }));
+
             grafica = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: tiempos.map(time => time.toFixed(2)), // Redondear los valores de tiempo a 2 decimales
-                    datasets: [{
-                        label: `Concentración del Reactivo ${reactivoBase + 1} (${unidadConcentracion})`,
-                        data: concentracionReactivoBase,
-                        borderColor: 'rgba(75, 192, 192, 1)',
-                        fill: false,
-                    }]
+                    datasets: datasets
                 },
                 options: {
                     scales: {
-                        x: { 
+                        x: {
                             title: { display: true, text: `Tiempo (${unidadTiempo})` }
                         },
-                        y: { 
+                        y: {
                             title: { display: true, text: `Concentración (${unidadConcentracion})` }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
                         }
                     }
                 }
@@ -340,8 +596,11 @@
         // Función para limpiar la gráfica y los resultados
         function limpiar() {
             if (grafica) grafica.destroy();  // Destruir la gráfica actual
-            document.getElementById('grafica').getContext('2d').clearRect(0, 0, 400, 400);  // Limpiar el canvas
+            const contexto = document.getElementById('grafica').getContext('2d');
+            contexto.clearRect(0, 0, contexto.canvas.width, contexto.canvas.height);  // Limpiar el canvas
             resultados = [];  // Borrar los resultados
+            nombresEspecies = [];
+            grafica = null;
         }
 
         // Función para descargar los resultados como un archivo CSV
@@ -354,7 +613,8 @@
             const notacion = document.getElementById("notacionDecimal").value;
 
             let csvContent = "data:text/csv;charset=utf-8,";
-            csvContent += "Tiempo;Concentraciones\n";  // Encabezado con punto y coma como separador
+            const encabezados = ["Tiempo", ...nombresEspecies];
+            csvContent += encabezados.join(";") + "\n";  // Encabezado con punto y coma como separador
 
             resultados.forEach((fila) => {
                 const filaFormateada = fila.map(num => {
@@ -377,6 +637,7 @@
 
         // Inicializar el formulario
         actualizarFormulario();
+        toggleReversible();
     </script>
 </body>
 </html>
