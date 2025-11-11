@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Cinética Química</title>
+    <script src="https://cdn.jsdelivr.net/npm/mathjs@11.2.1/lib/browser/math.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            display: flex;
+            justify-content: space-between;
+            max-width: 95%;
+            margin: 0 auto;
+        }
+        .left-panel, .right-panel {
+            background-color: white;
+            padding: 20px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+        }
+        .left-panel {
+            width: 35%;
+        }
+        .right-panel {
+            width: 60%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        input, select, button {
+            margin: 5px 0;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            width: calc(100% - 20px);
+        }
+        label {
+            font-weight: bold;
+            margin-top: 10px;
+            display: inline-block;
+        }
+        .form-group {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .form-group label {
+            flex: 1;
+            margin-right: 10px;
+        }
+        .form-group input, .form-group select {
+            flex: 2;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+            border: none;
+            font-size: 16px;
+            transition: background-color 0.3s ease;
+            width: 32%; /* Ajustar el ancho de los botones */
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        canvas {
+            width: 100%;
+            height: 600px; /* Aumentar la altura de la gráfica */
+        }
+        sub {
+            vertical-align: sub;
+            font-size: smaller;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Panel Izquierdo: Formulario -->
+        <div class="left-panel">
+            <h1>Simulador de Cinética Química</h1>
+
+            <div class="form-group">
+                <label for="numReactivos">Número de reactivos:</label>
+                <input type="number" id="numReactivos" value="1" min="1" onchange="actualizarFormulario()">
+            </div>
+
+            <div id="reactivosForm"></div>
+
+            <div class="form-group">
+                <label for="k">Constante de velocidad (k):</label>
+                <input type="number" id="k" value="0.6" step="0.01">
+            </div>
+
+            <div class="form-group">
+                <label for="unidadVelocidad">Unidad de constante de velocidad:</label>
+                <select id="unidadVelocidad">
+                    <option value="s">1/segundos</option>
+                    <option value="min">1/minutos</option>
+                    <option value="h">1/horas</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="tiempoFinal">Tiempo final (<i>t<sub>f</sub></i>):</label>
+                <input type="number" id="tiempoFinal" value="10" step="1">
+            </div>
+
+            <div class="form-group">
+                <label for="unidadTiempo">Unidad de tiempo de reacción:</label>
+                <select id="unidadTiempo">
+                    <option value="s">segundos</option>
+                    <option value="min">minutos</option>
+                    <option value="h">horas</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="unidadConcentracion">Unidad de concentración:</label>
+                <select id="unidadConcentracion">
+                    <option value="M">Molar</option>
+                    <option value="mM">mMolar</option>
+                    <option value="uM">µMolar</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="reactivoBase">Reactivo para representar:</label>
+                <select id="reactivoBase"></select>
+            </div>
+
+            <div class="form-group">
+                <button onclick="simular()">Resolver y Representar</button>
+                <button onclick="limpiar()">Borrar Resultado</button>
+                <button onclick="descargarCSV()">Descargar CSV</button>
+            </div>
+
+            <div class="form-group">
+                <label for="notacionDecimal">Notación decimal:</label>
+                <select id="notacionDecimal">
+                    <option value="punto">Punto decimal</option>
+                    <option value="coma">Coma decimal</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Panel Derecho: Gráfica -->
+        <div class="right-panel">
+            <canvas id="grafica"></canvas>
+        </div>
+    </div>
+
+    <script>
+        let grafica;  // Variable para la gráfica
+        let resultados = [];  // Almacenar resultados para CSV
+
+        // Actualiza el formulario según el número de reactivos
+        function actualizarFormulario() {
+            const numReactivos = document.getElementById('numReactivos').value;
+            const reactivosForm = document.getElementById('reactivosForm');
+            const reactivoBaseSelect = document.getElementById('reactivoBase');
+            reactivosForm.innerHTML = '';
+            reactivoBaseSelect.innerHTML = '';
+
+            for (let i = 0; i < numReactivos; i++) {
+                reactivosForm.innerHTML += `
+                    <div class="form-group">
+                        <label>Orden del reactivo ${i + 1}:</label>
+                        <input type="number" id="orden${i}" value="1" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label>Concentración inicial [A<sub>${i + 1}</sub>]<sub>0</sub>:</label>
+                        <input type="number" id="C0${i}" value="1" step="0.1">
+                    </div>
+                `;
+                reactivoBaseSelect.innerHTML += `<option value="${i}">Reactivo ${i + 1}</option>`;
+            }
+        }
+
+        // Función para resolver las ecuaciones y graficar los resultados
+        function simular() {
+            const numReactivos = document.getElementById('numReactivos').value;
+            const k = parseFloat(document.getElementById('k').value);
+            const unidadVelocidad = document.getElementById('unidadVelocidad').value;
+            const tiempoFinal = parseFloat(document.getElementById('tiempoFinal').value);
+            const unidadTiempo = document.getElementById('unidadTiempo').value;
+            const unidadConcentracion = document.getElementById('unidadConcentracion').value;
+            const reactivoBase = parseInt(document.getElementById('reactivoBase').value);
+            const numPuntos = 100;
+
+            let ordenes = [];
+            let concentracionesIniciales = [];
+
+            for (let i = 0; i < numReactivos; i++) {
+                ordenes.push(parseFloat(document.getElementById(`orden${i}`).value));
+                concentracionesIniciales.push(parseFloat(document.getElementById(`C0${i}`).value));
+            }
+
+            // Conversión de unidades de la constante de velocidad
+            let kConvertido = k;
+            if (unidadVelocidad === 'min') {
+                kConvertido = k / 60;  // Convertir de 1/minutos a 1/segundos
+            } else if (unidadVelocidad === 'h') {
+                kConvertido = k / 3600;  // Convertir de 1/horas a 1/segundos
+            }
+
+            // Conversión de tiempo de reacción a segundos
+            let tiempoFinalSegundos = tiempoFinal;
+            if (unidadTiempo === 'min') {
+                tiempoFinalSegundos = tiempoFinal * 60;  // Convertir de minutos a segundos
+            } else if (unidadTiempo === 'h') {
+                tiempoFinalSegundos = tiempoFinal * 3600;  // Convertir de horas a segundos
+            }
+
+            // Crear el vector de tiempo en segundos
+            let t = math.range(0, tiempoFinalSegundos, tiempoFinalSegundos / numPuntos).toArray();
+            let concentraciones = new Array(numPuntos).fill(0).map(() => Array(numReactivos).fill(0));
+
+            // Resolver ecuaciones diferenciales para cada reactivo
+            for (let i = 0; i < numPuntos; i++) {
+                let dt = (t[i + 1] || tiempoFinalSegundos) - t[i];  // Diferencia de tiempo entre puntos
+
+                for (let j = 0; j < numReactivos; j++) {
+                    let dCdt = -kConvertido * concentracionesIniciales.reduce((acc, C, idx) => acc * Math.pow(C, ordenes[idx]), 1); // Considera todas las concentraciones
+                    concentraciones[i][j] = concentracionesIniciales[j];
+                    concentracionesIniciales[j] += dCdt * dt;  // Integración numérica (Euler simple)
+                }
+            }
+
+            // Extraer las concentraciones del reactivo seleccionado
+            let concentracionReactivoBase = concentraciones.map(c => c[reactivoBase]);
+
+            // Convertir el vector de tiempo de vuelta a la unidad seleccionada por el usuario
+            if (unidadTiempo === 'min') {
+                t = t.map(tiempo => tiempo / 60);  // Convertir de segundos a minutos
+            } else if (unidadTiempo === 'h') {
+                t = t.map(tiempo => tiempo / 3600);  // Convertir de segundos a horas
+            }
+
+            // Guardar los resultados para el CSV
+            resultados = t.map((tiempo, index) => [tiempo, ...concentraciones[index]]);
+
+            // Graficar los resultados
+            const ctx = document.getElementById('grafica').getContext('2d');
+            if (grafica) grafica.destroy();  // Destruir la gráfica anterior si existe
+            grafica = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: t.map(time => time.toFixed(2)), // Redondear los valores de tiempo a 2 decimales
+                    datasets: [{
+                        label: `Concentración del Reactivo ${reactivoBase + 1} (${unidadConcentracion})`,
+                        data: concentracionReactivoBase,
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        fill: false,
+                    }]
+                },
+                options: {
+                    scales: {
+                        x: { 
+                            title: { display: true, text: `Tiempo (${unidadTiempo})` }
+                        },
+                        y: { 
+                            title: { display: true, text: `Concentración (${unidadConcentracion})` }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Función para limpiar la gráfica y los resultados
+        function limpiar() {
+            if (grafica) grafica.destroy();  // Destruir la gráfica actual
+            document.getElementById('grafica').getContext('2d').clearRect(0, 0, 400, 400);  // Limpiar el canvas
+            resultados = [];  // Borrar los resultados
+        }
+
+        // Función para descargar los resultados como un archivo CSV
+        function descargarCSV() {
+            if (resultados.length === 0) {
+                alert("No hay resultados para descargar.");
+                return;
+            }
+
+            const notacion = document.getElementById("notacionDecimal").value;
+
+            let csvContent = "data:text/csv;charset=utf-8,";
+            csvContent += "Tiempo;Concentraciones\n";  // Encabezado con punto y coma como separador
+
+            resultados.forEach((fila) => {
+                const filaFormateada = fila.map(num => {
+                    let strNum = num.toFixed(4); // Convertir a cadena con 4 decimales
+                    if (notacion === "coma") {
+                        strNum = strNum.replace('.', ','); // Reemplazar punto por coma
+                    }
+                    return strNum;
+                });
+                csvContent += filaFormateada.join(";") + "\n";  // Agregar cada fila de datos usando punto y coma
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "resultados_cinetica.csv");
+            document.body.appendChild(link);  // Necesario para hacer clic en el enlace
+            link.click();  // Descargar el archivo
+        }
+
+        // Inicializar el formulario
+        actualizarFormulario();
+    </script>
+</body>
+</html>
