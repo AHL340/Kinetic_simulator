@@ -15,7 +15,9 @@
         }
         .container {
             display: flex;
+            flex-wrap: wrap;
             justify-content: space-between;
+            gap: 20px;
             max-width: 95%;
             margin: 0 auto;
         }
@@ -24,12 +26,12 @@
             padding: 20px;
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
             border-radius: 8px;
+            flex: 1 1 320px;
         }
         .left-panel {
-            width: 35%;
+            max-width: 420px;
         }
         .right-panel {
-            width: 60%;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -64,16 +66,19 @@
             flex: 2;
         }
         button {
-            background-color: #007bff;
-            color: white;
+            background-color: #005fcc;
+            color: #ffffff;
             cursor: pointer;
             border: none;
             font-size: 16px;
             transition: background-color 0.3s ease;
-            width: 32%; /* Ajustar el ancho de los botones */
         }
         button:hover {
-            background-color: #0056b3;
+            background-color: #004099;
+        }
+        input:focus, select:focus, button:focus {
+            outline: 3px solid #ffbf47;
+            outline-offset: 2px;
         }
         canvas {
             width: 100%;
@@ -86,20 +91,44 @@
         .advanced-settings {
             margin-top: 15px;
         }
+        .button-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .button-group button {
+            flex: 1 1 150px;
+        }
+        .helper-text {
+            font-size: 0.9rem;
+            color: #1a1a1a;
+            margin-top: 10px;
+        }
+        @media (max-width: 900px) {
+            .container {
+                justify-content: center;
+            }
+            .left-panel, .right-panel {
+                max-width: 100%;
+            }
+            canvas {
+                height: 400px;
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="container" role="main" aria-labelledby="appTitle">
         <!-- Panel Izquierdo: Formulario -->
-        <div class="left-panel">
-            <h1>Simulador de Cinética Química</h1>
+        <div class="left-panel" role="form" aria-describedby="keyboardInstructions">
+            <h1 id="appTitle">Simulador de Cinética Química</h1>
 
             <div class="form-group">
                 <label for="numReactivos">Número de reactivos:</label>
                 <input type="number" id="numReactivos" value="1" min="1" onchange="actualizarFormulario()">
             </div>
 
-            <div id="reactivosForm"></div>
+            <div id="reactivosForm" aria-live="polite"></div>
 
             <div class="form-group">
                 <label for="k">Constante de velocidad (k):</label>
@@ -150,11 +179,13 @@
                 <select id="reactivoBase"></select>
             </div>
 
-            <div class="form-group">
+            <div class="form-group button-group" role="group" aria-label="Acciones del simulador">
                 <button onclick="simular()">Resolver y Representar</button>
                 <button onclick="limpiar()">Borrar Resultado</button>
                 <button onclick="descargarCSV()">Descargar CSV</button>
             </div>
+
+            <p class="helper-text" id="keyboardInstructions">Usa la tecla Tab para navegar entre los controles y Enter o la barra espaciadora para activar los botones.</p>
 
             <div class="form-group">
                 <label for="notacionDecimal">Notación decimal:</label>
@@ -185,7 +216,7 @@
         </div>
 
         <!-- Panel Derecho: Gráfica -->
-        <div class="right-panel">
+        <div class="right-panel" role="region" aria-label="Gráfico de resultados">
             <canvas id="grafica"></canvas>
         </div>
     </div>
