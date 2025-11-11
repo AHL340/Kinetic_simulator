@@ -320,6 +320,42 @@
             let tiempos = [];
             let concentraciones = [];
 
+            const reactivosEstequiometricos = coeficientesEstequiometricos
+                .map((coef, idx) => ({ coef, idx }))
+                .filter(item => item.coef < 0);
+
+            // Determinar el reactivo limitante comparando C0_i / |nu_i|
+            let infoReactivoLimitante = null;
+            if (reactivosEstequiometricos.length > 0) {
+                infoReactivoLimitante = reactivosEstequiometricos.reduce((limitante, item) => {
+                    const coefAbs = Math.abs(item.coef);
+                    const concentracionInicial = Math.max(concentracionesIniciales[item.idx], 0);
+                    const ratio = coefAbs > 0 ? concentracionInicial / coefAbs : Infinity;
+
+                    if (!limitante || ratio < limitante.ratio) {
+                        return {
+                            idx: item.idx,
+                            coef: item.coef,
+                            ratio,
+                            concentracionInicial,
+                        };
+                    }
+                    return limitante;
+                }, null);
+
+                if (infoReactivoLimitante) {
+                    infoReactivoLimitante.umbralRelativo = infoReactivoLimitante.concentracionInicial * 0.001;
+                    infoReactivoLimitante.umbralAbsoluto = 1e-9;
+                    // El umbral efectivo es el mayor de los criterios para detenerse cuanto antes
+                    infoReactivoLimitante.umbralDetencion = Math.max(
+                        infoReactivoLimitante.umbralRelativo,
+                        infoReactivoLimitante.umbralAbsoluto
+                    );
+                }
+            }
+
+            let conversionLimitante = null;
+
             const calcularDerivadas = (estado) => {
                 const producto = estado.reduce((acc, C, idx) => acc * Math.pow(Math.max(C, 0), ordenes[idx]), 1);
                 const velocidad = kConvertido * producto;
@@ -338,19 +374,24 @@
             concentraciones.push(estadoActual.slice());
 
             if (autoTiempo) {
-                const indicesReactivos = coeficientesEstequiometricos
-                    .map((coef, idx) => ({ coef, idx }))
-                    .filter(item => item.coef < 0);
-
-                if (indicesReactivos.length === 0) {
-                    alert('Debe definir al menos un reactivo con coeficiente estequiométrico negativo.');
+                if (!infoReactivoLimitante) {
+                    alert('Debe definir al menos un reactivo con coeficiente estequiométrico negativo para identificar el reactivo limitante.');
                     return;
                 }
 
+                const indicesReactivos = reactivosEstequiometricos;
                 const tolerancia = 1e-8;
                 const maxIteraciones = Math.max(pasos * 20, 1000);
                 let iteracion = 0;
                 let finalizadoAutomaticamente = false;
+
+                if (
+                    infoReactivoLimitante.concentracionInicial <= infoReactivoLimitante.umbralDetencion ||
+                    infoReactivoLimitante.concentracionInicial <= infoReactivoLimitante.umbralAbsoluto
+                ) {
+                    finalizadoAutomaticamente = true;
+                    tiempoFinalSegundos = tiempoActual;
+                }
 
                 while (iteracion < maxIteraciones) {
                     const derivadas = calcularDerivadas(estadoActual);
@@ -370,8 +411,29 @@
                     }
 
                     if (minimoTiempoHastaCero <= tolerancia) {
-                        finalizadoAutomaticamente = indicesReactivos.every(({ idx }) => Math.max(estadoActual[idx], 0) <= 1e-6);
-                        tiempoFinalSegundos = tiempoActual;
+                        const concentracionLimitanteActual = Math.max(estadoActual[infoReactivoLimitante.idx], 0);
+                        const derivadaLimitanteActual = Math.abs(derivadas[infoReactivoLimitante.idx]);
+
+                        if (infoReactivoLimitante.concentracionInicial > 0) {
+                            conversionLimitante = Math.min(
+                                100,
+                                Math.max(
+                                    0,
+                                    (1 - (concentracionLimitanteActual / infoReactivoLimitante.concentracionInicial)) * 100
+                                )
+                            );
+                        } else {
+                            conversionLimitante = concentracionLimitanteActual === 0 ? 100 : 0;
+                        }
+
+                        if (
+                            concentracionLimitanteActual <= infoReactivoLimitante.umbralDetencion ||
+                            concentracionLimitanteActual <= infoReactivoLimitante.umbralAbsoluto ||
+                            derivadaLimitanteActual <= 1e-12
+                        ) {
+                            tiempoFinalSegundos = tiempoActual;
+                            finalizadoAutomaticamente = true;
+                        }
                         break;
                     }
 
@@ -398,8 +460,28 @@
                     estadoActual = siguienteEstado;
                     iteracion++;
 
-                    const reaccionFinalizada = indicesReactivos.every(({ idx }) => Math.max(estadoActual[idx], 0) <= 1e-6);
-                    if (reaccionFinalizada) {
+                    const concentracionLimitante = Math.max(estadoActual[infoReactivoLimitante.idx], 0);
+                    const derivadaLimitante = Math.abs(derivadas[infoReactivoLimitante.idx]);
+
+                    if (infoReactivoLimitante.concentracionInicial > 0) {
+                        conversionLimitante = Math.min(
+                            100,
+                            Math.max(
+                                0,
+                                (1 - (concentracionLimitante / infoReactivoLimitante.concentracionInicial)) * 100
+                            )
+                        );
+                    } else {
+                        conversionLimitante = concentracionLimitante === 0 ? 100 : 0;
+                    }
+
+                    // Finalizar cuando el reactivo limitante alcanza el 99.9% de conversión,
+                    // queda por debajo del umbral absoluto o su derivada se vuelve casi nula.
+                    if (
+                        concentracionLimitante <= infoReactivoLimitante.umbralDetencion ||
+                        concentracionLimitante <= infoReactivoLimitante.umbralAbsoluto ||
+                        derivadaLimitante <= 1e-12
+                    ) {
                         tiempoFinalSegundos = tiempoActual;
                         finalizadoAutomaticamente = true;
                         break;
@@ -407,12 +489,8 @@
                 }
 
                 if (!finalizadoAutomaticamente) {
-                    const reaccionYaCompletada = indicesReactivos.every(({ idx }) => Math.max(estadoActual[idx], 0) <= 1e-6);
-                    if (!reaccionYaCompletada) {
-                        alert('No fue posible determinar el tiempo de reacción automáticamente. Revise los parámetros de entrada.');
-                        return;
-                    }
-                    tiempoFinalSegundos = tiempoActual;
+                    alert('No fue posible determinar el tiempo de reacción automáticamente con los criterios de conversión establecidos. Revise los parámetros de entrada.');
+                    return;
                 }
 
                 if (tiempos.length > pasos + 1) {
@@ -451,6 +529,23 @@
                     concentraciones.push(siguienteEstado.slice());
                     estadoActual = siguienteEstado;
                 }
+            }
+
+            if (infoReactivoLimitante && concentraciones.length > 0) {
+                const concentracionFinalLimitante = Math.max(concentraciones[concentraciones.length - 1][infoReactivoLimitante.idx], 0);
+                if (infoReactivoLimitante.concentracionInicial > 0) {
+                    conversionLimitante = Math.min(
+                        100,
+                        Math.max(
+                            0,
+                            (1 - (concentracionFinalLimitante / infoReactivoLimitante.concentracionInicial)) * 100
+                        )
+                    );
+                } else {
+                    conversionLimitante = concentracionFinalLimitante === 0 ? 100 : 0;
+                }
+
+                alert(`Reactivo limitante: Especie ${infoReactivoLimitante.idx + 1}. Conversión alcanzada: ${conversionLimitante.toFixed(4)}%.`);
             }
 
             // Extraer las concentraciones del reactivo seleccionado
