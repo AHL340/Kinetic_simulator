@@ -121,6 +121,13 @@
             </div>
 
             <div class="form-group">
+                <label>
+                    <input type="checkbox" id="tiempoAutomatico">
+                    Calcular automáticamente el tiempo de reacción
+                </label>
+            </div>
+
+            <div class="form-group">
                 <label for="unidadTiempo">Unidad de tiempo de reacción:</label>
                 <select id="unidadTiempo">
                     <option value="s">segundos</option>
@@ -226,6 +233,7 @@
             const metodoIntegracion = document.getElementById('metodoIntegracion').value;
             const numPuntos = parseInt(document.getElementById('numPuntos').value, 10);
             const forzarNoNegativas = document.getElementById('forzarNoNegativas').checked;
+            const autoTiempo = document.getElementById('tiempoAutomatico').checked;
 
             if (isNaN(numPuntos) || numPuntos < 1) {
                 alert('El número de puntos de cálculo debe ser un entero positivo.');
@@ -259,17 +267,25 @@
                 kConvertido = k / 3600;  // Convertir de 1/horas a 1/segundos
             }
 
+            if (!autoTiempo && (isNaN(tiempoFinal) || tiempoFinal <= 0)) {
+                alert('El tiempo final debe ser un número positivo.');
+                return;
+            }
+
             // Conversión de tiempo de reacción a segundos
-            let tiempoFinalSegundos = tiempoFinal;
-            if (unidadTiempo === 'min') {
-                tiempoFinalSegundos = tiempoFinal * 60;  // Convertir de minutos a segundos
-            } else if (unidadTiempo === 'h') {
-                tiempoFinalSegundos = tiempoFinal * 3600;  // Convertir de horas a segundos
+            let tiempoFinalSegundos = null;
+            if (!autoTiempo) {
+                tiempoFinalSegundos = tiempoFinal;
+                if (unidadTiempo === 'min') {
+                    tiempoFinalSegundos = tiempoFinal * 60;  // Convertir de minutos a segundos
+                } else if (unidadTiempo === 'h') {
+                    tiempoFinalSegundos = tiempoFinal * 3600;  // Convertir de horas a segundos
+                }
             }
 
             // Resolver ecuaciones diferenciales para cada reactivo usando el método seleccionado
             const pasos = Math.max(numPuntos, 1);
-            const dt = tiempoFinalSegundos / pasos;
+            const dt = autoTiempo || tiempoFinalSegundos === null ? null : tiempoFinalSegundos / pasos;
             let tiempos = [];
             let concentraciones = [];
 
@@ -290,36 +306,140 @@
             tiempos.push(tiempoActual);
             concentraciones.push(estadoActual.slice());
 
-            for (let i = 0; i < pasos; i++) {
-                let siguienteEstado;
+            if (autoTiempo) {
+                const indicesReactivos = coeficientesEstequiometricos
+                    .map((coef, idx) => ({ coef, idx }))
+                    .filter(item => item.coef < 0);
 
-                if (metodoIntegracion === 'euler') {
-                    const k1 = calcularDerivadas(estadoActual);
-                    siguienteEstado = estadoActual.map((c, idx) => c + k1[idx] * dt);
-                } else {
-                    const k1 = calcularDerivadas(estadoActual);
-                    const k2 = calcularDerivadas(estadoActual.map((c, idx) => c + 0.5 * dt * k1[idx]));
-                    const k3 = calcularDerivadas(estadoActual.map((c, idx) => c + 0.5 * dt * k2[idx]));
-                    const k4 = calcularDerivadas(estadoActual.map((c, idx) => c + dt * k3[idx]));
-                    siguienteEstado = estadoActual.map((c, idx) => c + (dt / 6) * (k1[idx] + 2 * k2[idx] + 2 * k3[idx] + k4[idx]));
+                if (indicesReactivos.length === 0) {
+                    alert('Debe definir al menos un reactivo con coeficiente estequiométrico negativo.');
+                    return;
                 }
 
-                siguienteEstado = aplicarForzado(siguienteEstado);
-                tiempoActual += dt;
+                const tolerancia = 1e-8;
+                const maxIteraciones = Math.max(pasos * 20, 1000);
+                let iteracion = 0;
+                let finalizadoAutomaticamente = false;
 
-                tiempos.push(tiempoActual);
-                concentraciones.push(siguienteEstado.slice());
-                estadoActual = siguienteEstado;
+                while (iteracion < maxIteraciones) {
+                    const derivadas = calcularDerivadas(estadoActual);
+
+                    const tiemposHastaCero = indicesReactivos.map(({ idx }) => {
+                        const derivada = derivadas[idx];
+                        if (derivada >= 0) return Infinity;
+                        const concentracion = Math.max(estadoActual[idx], 0);
+                        return concentracion / Math.abs(derivada);
+                    });
+
+                    const minimoTiempoHastaCero = Math.min(...tiemposHastaCero);
+
+                    if (!isFinite(minimoTiempoHastaCero) || minimoTiempoHastaCero === Infinity) {
+                        // No hay consumo de reactivos, finaliza para evitar bucles infinitos
+                        break;
+                    }
+
+                    if (minimoTiempoHastaCero <= tolerancia) {
+                        finalizadoAutomaticamente = indicesReactivos.every(({ idx }) => Math.max(estadoActual[idx], 0) <= 1e-6);
+                        tiempoFinalSegundos = tiempoActual;
+                        break;
+                    }
+
+                    let pasoAdaptativo = Math.min(minimoTiempoHastaCero / 5, minimoTiempoHastaCero);
+                    pasoAdaptativo = Math.max(pasoAdaptativo, tolerancia);
+
+                    let siguienteEstado;
+                    if (metodoIntegracion === 'euler') {
+                        const k1 = derivadas;
+                        siguienteEstado = estadoActual.map((c, idx) => c + k1[idx] * pasoAdaptativo);
+                    } else {
+                        const k1 = derivadas;
+                        const k2 = calcularDerivadas(estadoActual.map((c, idx) => c + 0.5 * pasoAdaptativo * k1[idx]));
+                        const k3 = calcularDerivadas(estadoActual.map((c, idx) => c + 0.5 * pasoAdaptativo * k2[idx]));
+                        const k4 = calcularDerivadas(estadoActual.map((c, idx) => c + pasoAdaptativo * k3[idx]));
+                        siguienteEstado = estadoActual.map((c, idx) => c + (pasoAdaptativo / 6) * (k1[idx] + 2 * k2[idx] + 2 * k3[idx] + k4[idx]));
+                    }
+
+                    siguienteEstado = aplicarForzado(siguienteEstado);
+                    tiempoActual += pasoAdaptativo;
+
+                    tiempos.push(tiempoActual);
+                    concentraciones.push(siguienteEstado.slice());
+                    estadoActual = siguienteEstado;
+                    iteracion++;
+
+                    const reaccionFinalizada = indicesReactivos.every(({ idx }) => Math.max(estadoActual[idx], 0) <= 1e-6);
+                    if (reaccionFinalizada) {
+                        tiempoFinalSegundos = tiempoActual;
+                        finalizadoAutomaticamente = true;
+                        break;
+                    }
+                }
+
+                if (!finalizadoAutomaticamente) {
+                    const reaccionYaCompletada = indicesReactivos.every(({ idx }) => Math.max(estadoActual[idx], 0) <= 1e-6);
+                    if (!reaccionYaCompletada) {
+                        alert('No fue posible determinar el tiempo de reacción automáticamente. Revise los parámetros de entrada.');
+                        return;
+                    }
+                    tiempoFinalSegundos = tiempoActual;
+                }
+
+                if (tiempos.length > pasos + 1) {
+                    const nuevoTiempos = [];
+                    const nuevoConcentraciones = [];
+                    const pasoMuestreo = (tiempos.length - 1) / pasos;
+
+                    for (let i = 0; i <= pasos; i++) {
+                        const indice = Math.min(Math.round(i * pasoMuestreo), tiempos.length - 1);
+                        nuevoTiempos.push(tiempos[indice]);
+                        nuevoConcentraciones.push(concentraciones[indice]);
+                    }
+
+                    tiempos = nuevoTiempos;
+                    concentraciones = nuevoConcentraciones;
+                }
+            } else {
+                for (let i = 0; i < pasos; i++) {
+                    let siguienteEstado;
+
+                    if (metodoIntegracion === 'euler') {
+                        const k1 = calcularDerivadas(estadoActual);
+                        siguienteEstado = estadoActual.map((c, idx) => c + k1[idx] * dt);
+                    } else {
+                        const k1 = calcularDerivadas(estadoActual);
+                        const k2 = calcularDerivadas(estadoActual.map((c, idx) => c + 0.5 * dt * k1[idx]));
+                        const k3 = calcularDerivadas(estadoActual.map((c, idx) => c + 0.5 * dt * k2[idx]));
+                        const k4 = calcularDerivadas(estadoActual.map((c, idx) => c + dt * k3[idx]));
+                        siguienteEstado = estadoActual.map((c, idx) => c + (dt / 6) * (k1[idx] + 2 * k2[idx] + 2 * k3[idx] + k4[idx]));
+                    }
+
+                    siguienteEstado = aplicarForzado(siguienteEstado);
+                    tiempoActual += dt;
+
+                    tiempos.push(tiempoActual);
+                    concentraciones.push(siguienteEstado.slice());
+                    estadoActual = siguienteEstado;
+                }
             }
 
             // Extraer las concentraciones del reactivo seleccionado
             let concentracionReactivoBase = concentraciones.map(c => c[reactivoBase]);
 
             // Convertir el vector de tiempo de vuelta a la unidad seleccionada por el usuario
+            let factorTiempo = 1;
             if (unidadTiempo === 'min') {
-                tiempos = tiempos.map(tiempo => tiempo / 60);  // Convertir de segundos a minutos
+                factorTiempo = 60;
             } else if (unidadTiempo === 'h') {
-                tiempos = tiempos.map(tiempo => tiempo / 3600);  // Convertir de segundos a horas
+                factorTiempo = 3600;
+            }
+
+            tiempos = tiempos.map(tiempo => tiempo / factorTiempo);
+
+            if (autoTiempo) {
+                const tiempoFinalConvertido = tiempoFinalSegundos / factorTiempo;
+                if (!isNaN(tiempoFinalConvertido) && isFinite(tiempoFinalConvertido)) {
+                    document.getElementById('tiempoFinal').value = tiempoFinalConvertido.toFixed(4);
+                }
             }
 
             // Guardar los resultados para el CSV
@@ -390,8 +510,16 @@
             link.click();  // Descargar el archivo
         }
 
+        const checkboxTiempoAutomatico = document.getElementById('tiempoAutomatico');
+        const manejarCambioTiempoAutomatico = (evento) => {
+            document.getElementById('tiempoFinal').disabled = evento.target.checked;
+        };
+
+        checkboxTiempoAutomatico.addEventListener('change', manejarCambioTiempoAutomatico);
+
         // Inicializar el formulario
         actualizarFormulario();
+        manejarCambioTiempoAutomatico({ target: checkboxTiempoAutomatico });
     </script>
 </body>
 </html>
