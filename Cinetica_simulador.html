@@ -41,6 +41,10 @@
             border-radius: 4px;
             width: calc(100% - 20px);
         }
+        input[type="checkbox"] {
+            width: auto;
+            margin-left: 0;
+        }
         label {
             font-weight: bold;
             margin-top: 10px;
@@ -78,6 +82,9 @@
         sub {
             vertical-align: sub;
             font-size: smaller;
+        }
+        .advanced-settings {
+            margin-top: 15px;
         }
     </style>
 </head>
@@ -149,6 +156,25 @@
                     <option value="coma">Coma decimal</option>
                 </select>
             </div>
+
+            <details class="advanced-settings">
+                <summary>Configuración avanzada</summary>
+                <div class="form-group">
+                    <label for="metodoIntegracion">Método numérico:</label>
+                    <select id="metodoIntegracion">
+                        <option value="rk4" selected>Runge-Kutta 4º orden</option>
+                        <option value="euler">Euler hacia adelante</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="numPuntos">Puntos de cálculo:</label>
+                    <input type="number" id="numPuntos" value="200" min="10" step="10">
+                </div>
+                <div class="form-group">
+                    <label for="forzarNoNegativas">Forzar concentraciones no negativas:</label>
+                    <input type="checkbox" id="forzarNoNegativas" checked>
+                </div>
+            </details>
         </div>
 
         <!-- Panel Derecho: Gráfica -->
@@ -186,14 +212,21 @@
 
         // Función para resolver las ecuaciones y graficar los resultados
         function simular() {
-            const numReactivos = document.getElementById('numReactivos').value;
+            const numReactivos = parseInt(document.getElementById('numReactivos').value, 10);
             const k = parseFloat(document.getElementById('k').value);
             const unidadVelocidad = document.getElementById('unidadVelocidad').value;
             const tiempoFinal = parseFloat(document.getElementById('tiempoFinal').value);
             const unidadTiempo = document.getElementById('unidadTiempo').value;
             const unidadConcentracion = document.getElementById('unidadConcentracion').value;
             const reactivoBase = parseInt(document.getElementById('reactivoBase').value);
-            const numPuntos = 100;
+            const metodoIntegracion = document.getElementById('metodoIntegracion').value;
+            const numPuntos = parseInt(document.getElementById('numPuntos').value, 10);
+            const forzarNoNegativas = document.getElementById('forzarNoNegativas').checked;
+
+            if (isNaN(numPuntos) || numPuntos < 1) {
+                alert('El número de puntos de cálculo debe ser un entero positivo.');
+                return;
+            }
 
             let ordenes = [];
             let concentracionesIniciales = [];
@@ -219,19 +252,49 @@
                 tiempoFinalSegundos = tiempoFinal * 3600;  // Convertir de horas a segundos
             }
 
-            // Crear el vector de tiempo en segundos
-            let t = math.range(0, tiempoFinalSegundos, tiempoFinalSegundos / numPuntos).toArray();
-            let concentraciones = new Array(numPuntos).fill(0).map(() => Array(numReactivos).fill(0));
+            // Resolver ecuaciones diferenciales para cada reactivo usando el método seleccionado
+            const pasos = Math.max(numPuntos, 1);
+            const dt = tiempoFinalSegundos / pasos;
+            let tiempos = [];
+            let concentraciones = [];
 
-            // Resolver ecuaciones diferenciales para cada reactivo
-            for (let i = 0; i < numPuntos; i++) {
-                let dt = (t[i + 1] || tiempoFinalSegundos) - t[i];  // Diferencia de tiempo entre puntos
+            const calcularDerivadas = (estado) => {
+                const producto = estado.reduce((acc, C, idx) => acc * Math.pow(Math.max(C, 0), ordenes[idx]), 1);
+                const dCdt = -kConvertido * producto;
+                return estado.map(() => dCdt);
+            };
 
-                for (let j = 0; j < numReactivos; j++) {
-                    let dCdt = -kConvertido * concentracionesIniciales.reduce((acc, C, idx) => acc * Math.pow(C, ordenes[idx]), 1); // Considera todas las concentraciones
-                    concentraciones[i][j] = concentracionesIniciales[j];
-                    concentracionesIniciales[j] += dCdt * dt;  // Integración numérica (Euler simple)
+            const aplicarForzado = (estado) => {
+                if (!forzarNoNegativas) return estado;
+                return estado.map(valor => Math.max(valor, 0));
+            };
+
+            let estadoActual = concentracionesIniciales.slice();
+            let tiempoActual = 0;
+
+            tiempos.push(tiempoActual);
+            concentraciones.push(estadoActual.slice());
+
+            for (let i = 0; i < pasos; i++) {
+                let siguienteEstado;
+
+                if (metodoIntegracion === 'euler') {
+                    const k1 = calcularDerivadas(estadoActual);
+                    siguienteEstado = estadoActual.map((c, idx) => c + k1[idx] * dt);
+                } else {
+                    const k1 = calcularDerivadas(estadoActual);
+                    const k2 = calcularDerivadas(estadoActual.map((c, idx) => c + 0.5 * dt * k1[idx]));
+                    const k3 = calcularDerivadas(estadoActual.map((c, idx) => c + 0.5 * dt * k2[idx]));
+                    const k4 = calcularDerivadas(estadoActual.map((c, idx) => c + dt * k3[idx]));
+                    siguienteEstado = estadoActual.map((c, idx) => c + (dt / 6) * (k1[idx] + 2 * k2[idx] + 2 * k3[idx] + k4[idx]));
                 }
+
+                siguienteEstado = aplicarForzado(siguienteEstado);
+                tiempoActual += dt;
+
+                tiempos.push(tiempoActual);
+                concentraciones.push(siguienteEstado.slice());
+                estadoActual = siguienteEstado;
             }
 
             // Extraer las concentraciones del reactivo seleccionado
@@ -239,13 +302,13 @@
 
             // Convertir el vector de tiempo de vuelta a la unidad seleccionada por el usuario
             if (unidadTiempo === 'min') {
-                t = t.map(tiempo => tiempo / 60);  // Convertir de segundos a minutos
+                tiempos = tiempos.map(tiempo => tiempo / 60);  // Convertir de segundos a minutos
             } else if (unidadTiempo === 'h') {
-                t = t.map(tiempo => tiempo / 3600);  // Convertir de segundos a horas
+                tiempos = tiempos.map(tiempo => tiempo / 3600);  // Convertir de segundos a horas
             }
 
             // Guardar los resultados para el CSV
-            resultados = t.map((tiempo, index) => [tiempo, ...concentraciones[index]]);
+            resultados = tiempos.map((tiempo, index) => [tiempo, ...concentraciones[index]]);
 
             // Graficar los resultados
             const ctx = document.getElementById('grafica').getContext('2d');
@@ -253,7 +316,7 @@
             grafica = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: t.map(time => time.toFixed(2)), // Redondear los valores de tiempo a 2 decimales
+                    labels: tiempos.map(time => time.toFixed(2)), // Redondear los valores de tiempo a 2 decimales
                     datasets: [{
                         label: `Concentración del Reactivo ${reactivoBase + 1} (${unidadConcentracion})`,
                         data: concentracionReactivoBase,
