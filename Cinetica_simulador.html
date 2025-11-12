@@ -180,6 +180,18 @@
                 </label>
             </div>
 
+            <div class="form-group" id="stopTargetControls" aria-live="polite">
+                <label for="stopConvPreset">Auto stop at:</label>
+                <select id="stopConvPreset">
+                    <option value="auto" selected>Auto (99.9% if n_eff ≤ 1; 95% if n_eff &gt; 1)</option>
+                    <option value="99.9">99.9%</option>
+                    <option value="99">99%</option>
+                    <option value="95">95%</option>
+                    <option value="custom">Custom</option>
+                </select>
+                <input id="stopConvCustom" type="number" min="50" max="99.99" step="0.01" value="99.9" style="width:6em" disabled>
+            </div>
+
             <div class="form-group">
                 <label for="unidadTiempo">Unidad de tiempo de reacción:</label>
                 <select id="unidadTiempo">
@@ -282,6 +294,41 @@
                 }
             });
             return set;
+        }
+
+        // === Isolation & limiting-reactant stop rule ===
+        function pickFracRest(n_eff) {
+            // Decide the residual fraction of the limiting reactant based on user preference.
+            const preset = document.getElementById('stopConvPreset')?.value || 'auto';
+            if (preset === '99.9') return 0.001;
+            if (preset === '99') return 0.01;
+            if (preset === '95') return 0.05;
+            if (preset === 'custom') {
+                const rawValue = document.getElementById('stopConvCustom')?.value || '99.9';
+                const parsed = parseFloat(rawValue);
+                const clamped = Math.min(99.99, Math.max(50, Number.isNaN(parsed) ? 99.9 : parsed));
+                return 1 - clamped / 100;
+            }
+            return (n_eff > 1) ? 0.05 : 0.001;
+        }
+
+        // === Isolation & limiting-reactant stop rule ===
+        function formatStopPercentage(value) {
+            // Helper to keep at most three decimals without trailing zeros.
+            return parseFloat(value.toFixed(3)).toString();
+        }
+
+        // === Isolation & limiting-reactant stop rule ===
+        function describirStopTarget(preset, nEff, porcentaje) {
+            const porcentajeTexto = formatStopPercentage(porcentaje);
+            if (preset === 'auto') {
+                const modo = nEff > 1 ? 'auto, n_eff>1' : 'auto, n_eff≤1';
+                return `Stop target: ${porcentajeTexto}% (${modo})`;
+            }
+            if (preset === 'custom') {
+                return `Stop target: ${porcentajeTexto}% (manual custom)`;
+            }
+            return `Stop target: ${porcentajeTexto}% (manual)`;
         }
 
         // === Isolation & limiting-reactant stop rule ===
@@ -637,8 +684,13 @@
                 alert('Debe dejar al menos un reactivo que no sea aislado ni catalizador para continuar con la simulación.');
                 return;
             }
-            const fraccionRestanteLimitante = 1e-3; // === Isolation & limiting-reactant stop rule ===
+            const activeReactants = reactivosNoAislados.map(item => item.idx); // === Isolation & limiting-reactant stop rule ===
+            const n_eff = activeReactants.reduce((acc, idx) => acc + Math.max(ordenes[idx] || 0, 0), 0); // Suma de órdenes activos
+            const fraccionRestanteLimitante = pickFracRest(n_eff); // === Isolation & limiting-reactant stop rule ===
             const umbralAbsolutoLimitante = 1e-9; // === Isolation & limiting-reactant stop rule ===
+            const presetSeleccionado = document.getElementById('stopConvPreset')?.value || 'auto';
+            const stopTargetPercent = (1 - fraccionRestanteLimitante) * 100; // Conversión objetivo expresada en %
+            const stopTargetDescriptor = describirStopTarget(presetSeleccionado, n_eff, stopTargetPercent);
 
             let infoReactivoLimitante = null;
             if (reactivosNoAislados.length > 0) {
@@ -662,6 +714,10 @@
                     infoReactivoLimitante.umbralRelativo = infoReactivoLimitante.concentracionInicial * fraccionRestanteLimitante;
                     infoReactivoLimitante.umbralAbsoluto = umbralAbsolutoLimitante;
                     infoReactivoLimitante.fraccionRestante = fraccionRestanteLimitante;
+                    infoReactivoLimitante.stopTargetDescriptor = stopTargetDescriptor;
+                    infoReactivoLimitante.stopTargetPercent = stopTargetPercent;
+                    infoReactivoLimitante.stopTargetPreset = presetSeleccionado;
+                    infoReactivoLimitante.n_eff = n_eff;
                 }
             }
 
@@ -699,7 +755,7 @@
 
                 let razon = null;
                 if (concentracion <= umbralRelativo) {
-                    razon = '99.9% conversion';
+                    razon = 'Stop target reached';
                 } else if (concentracion <= umbralAbsoluto) {
                     razon = 'Absolute safety floor';
                 } else if (usarSalvaguardaDerivada && derivadaAbs <= 1e-12) {
@@ -901,11 +957,14 @@
             const catalizadorTexto = catalizadorLista.length > 0 ? catalizadorLista.join(', ') : 'None'; // === Catalyst feature ===
             const statusElement = document.getElementById('limitingStatus'); // === Isolation & limiting-reactant stop rule ===
             if (statusElement) {
+                const stopNote = infoReactivoLimitante && infoReactivoLimitante.stopTargetDescriptor
+                    ? ` ${infoReactivoLimitante.stopTargetDescriptor}`
+                    : '';
                 if (infoReactivoLimitante) {
                     const conversionTexto = conversionLimitante !== null ? conversionLimitante.toFixed(4) : 'N/A';
-                    statusElement.textContent = `Limiting reactant: Especie ${infoReactivoLimitante.idx + 1}. Final conversion: ${conversionTexto}%. Stop reason: ${razonDetencion}. Isolation set: [${aislamientoTexto}]. Catalyst set: [${catalizadorTexto}].`; // === Catalyst feature ===
+                    statusElement.textContent = `Limiting reactant: Especie ${infoReactivoLimitante.idx + 1}. Final conversion: ${conversionTexto}%. Stop reason: ${razonDetencion}. Isolation set: [${aislamientoTexto}]. Catalyst set: [${catalizadorTexto}].${stopNote}`; // === Catalyst feature ===
                 } else {
-                    statusElement.textContent = `Limiting reactant: N/A. Final conversion: N/A. Stop reason: ${razonDetencion}. Isolation set: [${aislamientoTexto}]. Catalyst set: [${catalizadorTexto}].`; // === Catalyst feature ===
+                    statusElement.textContent = `Limiting reactant: N/A. Final conversion: N/A. Stop reason: ${razonDetencion}. Isolation set: [${aislamientoTexto}]. Catalyst set: [${catalizadorTexto}].${stopNote}`; // === Catalyst feature ===
                 }
             }
 
@@ -1006,11 +1065,34 @@
             document.getElementById('tiempoFinal').disabled = evento.target.checked;
         };
 
+        const stopConvPresetSelect = document.getElementById('stopConvPreset');
+        const stopConvCustomInput = document.getElementById('stopConvCustom');
+
+        const manejarCambioStopPreset = () => {
+            if (!stopConvPresetSelect || !stopConvCustomInput) return;
+            const esPersonalizado = stopConvPresetSelect.value === 'custom';
+            stopConvCustomInput.disabled = !esPersonalizado;
+        };
+
+        const manejarCambioStopCustom = () => {
+            if (!stopConvCustomInput) return;
+            const parsed = parseFloat(stopConvCustomInput.value);
+            const clamped = Math.min(99.99, Math.max(50, Number.isNaN(parsed) ? 99.9 : parsed));
+            stopConvCustomInput.value = clamped;
+        };
+
         checkboxTiempoAutomatico.addEventListener('change', manejarCambioTiempoAutomatico);
+        if (stopConvPresetSelect) {
+            stopConvPresetSelect.addEventListener('change', manejarCambioStopPreset);
+        }
+        if (stopConvCustomInput) {
+            stopConvCustomInput.addEventListener('change', manejarCambioStopCustom);
+        }
 
         // Inicializar el formulario
         actualizarFormulario();
         manejarCambioTiempoAutomatico({ target: checkboxTiempoAutomatico });
+        manejarCambioStopPreset();
     </script>
 </body>
 </html>
