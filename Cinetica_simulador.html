@@ -7,9 +7,35 @@
     <script src="https://cdn.jsdelivr.net/npm/mathjs@11.2.1/lib/browser/math.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
+        :root {
+            /* === Theme palette (light default) === */
+            --bg: #f4f4f9;
+            --card: #ffffff;
+            --text: #1a1a1a;
+            --muted: #5a5a72;
+            --brand: #005fcc;
+            --brand-600: #004099;
+            --accent: #ffbf47;
+            --grid: rgba(26, 26, 26, 0.15);
+            --row: rgba(0, 95, 204, 0.08);
+        }
+
+        :root[data-theme="dark"] {
+            --bg: #10131a;
+            --card: #1a1f2b;
+            --text: #f4f6fb;
+            --muted: #a9b3ce;
+            --brand: #3b82f6;
+            --brand-600: #2563eb;
+            --accent: #facc15;
+            --grid: rgba(244, 246, 251, 0.25);
+            --row: rgba(59, 130, 246, 0.12);
+        }
+
         body {
             font-family: Arial, sans-serif;
-            background-color: #f4f4f9;
+            background-color: var(--bg);
+            color: var(--text);
             margin: 0;
             padding: 20px;
         }
@@ -22,9 +48,9 @@
             margin: 0 auto;
         }
         .left-panel, .right-panel {
-            background-color: white;
+            background-color: var(--card);
             padding: 20px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.12);
             border-radius: 8px;
             flex: 1 1 320px;
         }
@@ -39,9 +65,11 @@
         input, select, button {
             margin: 5px 0;
             padding: 8px;
-            border: 1px solid #ccc;
+            border: 1px solid var(--grid);
             border-radius: 4px;
             width: calc(100% - 20px);
+            background-color: var(--card);
+            color: var(--text);
         }
         input[type="checkbox"] {
             width: auto;
@@ -70,9 +98,10 @@
         }
         /* === Isolation & limiting-reactant stop rule === */
         .species-table th, .species-table td {
-            border: 1px solid #ccc;
+            border: 1px solid var(--grid);
             padding: 6px;
             text-align: center;
+            background-color: var(--card);
         }
         /* === Isolation & limiting-reactant stop rule === */
         .species-table input[type="number"] {
@@ -83,14 +112,17 @@
         .status-line {
             font-size: 0.95rem;
             margin-top: 15px;
-            font-weight: bold;
-            color: #0a3d62;
+            font-weight: 600;
+            color: var(--text);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
         }
         .form-group input, .form-group select {
             flex: 2;
         }
         button {
-            background-color: #005fcc;
+            background-color: var(--brand);
             color: #ffffff;
             cursor: pointer;
             border: none;
@@ -98,10 +130,10 @@
             transition: background-color 0.3s ease;
         }
         button:hover {
-            background-color: #004099;
+            background-color: var(--brand-600);
         }
         input:focus, select:focus, button:focus {
-            outline: 3px solid #ffbf47;
+            outline: 3px solid var(--accent);
             outline-offset: 2px;
         }
         canvas {
@@ -122,11 +154,46 @@
         }
         .button-group button {
             flex: 1 1 150px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .chip {
+            background-color: var(--row);
+            color: var(--text);
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 0.9rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
         }
         .helper-text {
             font-size: 0.9rem;
-            color: #1a1a1a;
+            color: var(--muted);
             margin-top: 10px;
+        }
+        .title-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+        #themeToggle {
+            flex: 0 0 auto;
+            padding: 8px 14px;
+            font-size: 0.95rem;
+        }
+        .plot-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .plot-controls label {
+            font-weight: bold;
         }
         @media (max-width: 900px) {
             .container {
@@ -139,13 +206,25 @@
                 height: 400px;
             }
         }
+
+        /* === Sticky left panel === */
+        @media (min-width: 1000px) {
+            .left-panel {
+                position: sticky;
+                top: 20px;
+                align-self: flex-start;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="container" role="main" aria-labelledby="appTitle">
         <!-- Panel Izquierdo: Formulario -->
         <div class="left-panel" role="form" aria-describedby="keyboardInstructions">
-            <h1 id="appTitle">Simulador de Cinética Química</h1>
+            <div class="title-bar">
+                <h1 id="appTitle">Simulador de Cinética Química</h1>
+                <button id="themeToggle" type="button" aria-label="Cambiar tema">Theme</button>
+            </div>
 
             <div class="form-group">
                 <label for="numReactivos">Número de reactivos:</label>
@@ -203,10 +282,28 @@
                 <select id="reactivoBase"></select>
             </div>
 
+            <div class="plot-controls" aria-label="Opciones de representación">
+                <label for="plotMode">Modo de gráfico:</label>
+                <select id="plotMode">
+                    <option value="all" selected>All species</option>
+                    <option value="selected">Only selected</option>
+                </select>
+            </div>
+
+            <!-- === Toolbar icons === -->
             <div class="form-group button-group" role="group" aria-label="Acciones del simulador">
-                <button onclick="simular()">Resolver y Representar</button>
-                <button onclick="limpiar()">Borrar Resultado</button>
-                <button onclick="descargarCSV()">Descargar CSV</button>
+                <button onclick="simular()" aria-label="Calcular reacción">
+                    <span aria-hidden="true">▶️</span>
+                    <span>Calcular</span>
+                </button>
+                <button onclick="limpiar()" aria-label="Limpiar resultados">
+                    <span aria-hidden="true">🧹</span>
+                    <span>Limpiar</span>
+                </button>
+                <button onclick="descargarCSV()" aria-label="Descargar resultados en CSV">
+                    <span aria-hidden="true">💾</span>
+                    <span>CSV</span>
+                </button>
             </div>
 
             <p class="helper-text" id="keyboardInstructions">Usa la tecla Tab para navegar entre los controles y Enter o la barra espaciadora para activar los botones.</p>
@@ -255,6 +352,157 @@
     <script>
         let grafica;  // Variable para la gráfica
         let resultados = [];  // Almacenar resultados para CSV
+        let datosSimulacion = null; // === Chart state cache ===
+
+        // === Theme toggle ===
+        const root = document.documentElement;
+        const themeToggleBtn = document.getElementById('themeToggle');
+        if (themeToggleBtn) {
+            themeToggleBtn.addEventListener('click', () => {
+                root.dataset.theme = root.dataset.theme === 'dark' ? '' : 'dark';
+                if (datosSimulacion) {
+                    reconstruirGrafica();
+                }
+            });
+        }
+
+        // === Plot mode selector wiring ===
+        const plotModeSelect = document.getElementById('plotMode');
+        const reactivoBaseSelect = document.getElementById('reactivoBase');
+        if (plotModeSelect) {
+            plotModeSelect.addEventListener('change', () => {
+                if (datosSimulacion) {
+                    reconstruirGrafica();
+                }
+            });
+        }
+        if (reactivoBaseSelect) {
+            reactivoBaseSelect.addEventListener('change', () => {
+                if (datosSimulacion) {
+                    datosSimulacion.reactivoBase = parseInt(reactivoBaseSelect.value, 10) || 0;
+                    reconstruirGrafica();
+                }
+            });
+        }
+
+        // === Status chips ===
+        function crearChip(etiqueta, valor) {
+            const safeValor = valor ? valor : 'N/A';
+            return `<span class="chip"><strong>${etiqueta}:</strong> <span>${safeValor}</span></span>`;
+        }
+
+        function actualizarChipsEstado({
+            infoReactivoLimitante,
+            conversionLimitante,
+            razonDetencion,
+            aislamientoTexto,
+            catalizadorTexto
+        }) {
+            const statusElement = document.getElementById('limitingStatus');
+            if (!statusElement) return;
+
+            if (!infoReactivoLimitante && !razonDetencion) {
+                statusElement.innerHTML = '';
+                return;
+            }
+
+            const chips = [];
+            const limitante = infoReactivoLimitante ? `Especie ${infoReactivoLimitante.idx + 1}` : 'N/A';
+            const conversionTexto = typeof conversionLimitante === 'number' && !Number.isNaN(conversionLimitante)
+                ? `${conversionLimitante.toFixed(4)}%`
+                : 'N/A';
+            chips.push(crearChip('Reactivo limitante', limitante));
+            chips.push(crearChip('Conversión final', conversionTexto));
+            chips.push(crearChip('Motivo de detención', razonDetencion || 'N/A'));
+            chips.push(crearChip('Isolation set', aislamientoTexto ? `[${aislamientoTexto}]` : '[None]'));
+            chips.push(crearChip('Catalyst set', catalizadorTexto ? `[${catalizadorTexto}]` : '[None]'));
+
+            statusElement.innerHTML = chips.join('');
+        }
+
+        // === Chart: plotMode all/selected ===
+        function buildChart({ plotMode, tiempos, concentraciones, reactivoBase, unidadTiempo, unidadConcentracion }) {
+            const ctx = document.getElementById('grafica').getContext('2d');
+            if (grafica) grafica.destroy();
+
+            const estilos = getComputedStyle(document.documentElement);
+            const gridColor = estilos.getPropertyValue('--grid').trim() || 'rgba(0,0,0,0.1)';
+            const textoColor = estilos.getPropertyValue('--text').trim() || '#1a1a1a';
+
+            const totalEspecies = concentraciones.length > 0 ? concentraciones[0].length : 0;
+            const datasets = [];
+            const baseHue = 210;
+            const hueStep = 35;
+
+            const agregarDataset = (indice) => {
+                const hue = (baseHue + hueStep * indice) % 360;
+                const color = `hsl(${hue}, 70%, 50%)`;
+                datasets.push({
+                    label: `Especie ${indice + 1} (${unidadConcentracion})`,
+                    data: concentraciones.map(fila => fila[indice]),
+                    borderColor: color,
+                    backgroundColor: 'transparent',
+                    borderWidth: indice === reactivoBase ? 3 : 1.8,
+                    tension: 0.22,
+                    pointRadius: 0,
+                    spanGaps: true
+                });
+            };
+
+            if (plotMode === 'selected') {
+                if (reactivoBase >= 0 && reactivoBase < totalEspecies) {
+                    agregarDataset(reactivoBase);
+                }
+            } else {
+                for (let i = 0; i < totalEspecies; i++) {
+                    agregarDataset(i);
+                }
+            }
+
+            grafica = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: tiempos.map(time => Number.isFinite(time) ? time.toFixed(2) : time),
+                    datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            title: { display: true, text: `Tiempo (${unidadTiempo})`, color: textoColor },
+                            ticks: { color: textoColor },
+                            grid: { color: gridColor }
+                        },
+                        y: {
+                            title: { display: true, text: `Concentración (${unidadConcentracion})`, color: textoColor },
+                            ticks: { color: textoColor },
+                            grid: { color: gridColor }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: textoColor
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function reconstruirGrafica() {
+            if (!datosSimulacion) return;
+            const plotMode = plotModeSelect ? plotModeSelect.value : 'all';
+            buildChart({
+                plotMode,
+                tiempos: datosSimulacion.tiempos,
+                concentraciones: datosSimulacion.concentraciones,
+                reactivoBase: datosSimulacion.reactivoBase,
+                unidadTiempo: datosSimulacion.unidadTiempo,
+                unidadConcentracion: datosSimulacion.unidadConcentracion
+            });
+        }
 
         // === Isolation & limiting-reactant stop rule ===
         function getCheckedIsolationSet() {
@@ -872,18 +1120,13 @@
             const catalizadorLista = Array.from(catalystSet).sort((a, b) => a - b).map(idx => `Especie ${idx + 1}`); // === Catalyst feature ===
             const aislamientoTexto = aislamientoLista.length > 0 ? aislamientoLista.join(', ') : 'None'; // === Catalyst feature ===
             const catalizadorTexto = catalizadorLista.length > 0 ? catalizadorLista.join(', ') : 'None'; // === Catalyst feature ===
-            const statusElement = document.getElementById('limitingStatus'); // === Isolation & limiting-reactant stop rule ===
-            if (statusElement) {
-                if (infoReactivoLimitante) {
-                    const conversionTexto = conversionLimitante !== null ? conversionLimitante.toFixed(4) : 'N/A';
-                    statusElement.textContent = `Limiting reactant: Especie ${infoReactivoLimitante.idx + 1}. Final conversion: ${conversionTexto}%. Stop reason: ${razonDetencion}. Isolation set: [${aislamientoTexto}]. Catalyst set: [${catalizadorTexto}].`; // === Catalyst feature ===
-                } else {
-                    statusElement.textContent = `Limiting reactant: N/A. Final conversion: N/A. Stop reason: ${razonDetencion}. Isolation set: [${aislamientoTexto}]. Catalyst set: [${catalizadorTexto}].`; // === Catalyst feature ===
-                }
-            }
-
-            // Extraer las concentraciones del reactivo seleccionado
-            let concentracionReactivoBase = concentraciones.map(c => c[reactivoBase]);
+            actualizarChipsEstado({
+                infoReactivoLimitante,
+                conversionLimitante,
+                razonDetencion,
+                aislamientoTexto,
+                catalizadorTexto
+            });
 
             // Convertir el vector de tiempo de vuelta a la unidad seleccionada por el usuario
             let factorTiempo = 1;
@@ -905,41 +1148,29 @@
             // Guardar los resultados para el CSV
             resultados = tiempos.map((tiempo, index) => [tiempo, ...concentraciones[index]]);
 
-            // Graficar los resultados
-            const ctx = document.getElementById('grafica').getContext('2d');
-            if (grafica) grafica.destroy();  // Destruir la gráfica anterior si existe
-            grafica = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: tiempos.map(time => time.toFixed(2)), // Redondear los valores de tiempo a 2 decimales
-                    datasets: [{
-                        label: `Concentración de la Especie ${reactivoBase + 1} (${unidadConcentracion})`,
-                        data: concentracionReactivoBase,
-                        borderColor: 'rgba(75, 192, 192, 1)',
-                        fill: false,
-                    }]
-                },
-                options: {
-                    scales: {
-                        x: { 
-                            title: { display: true, text: `Tiempo (${unidadTiempo})` }
-                        },
-                        y: { 
-                            title: { display: true, text: `Concentración (${unidadConcentracion})` }
-                        }
-                    }
-                }
-            });
+            datosSimulacion = {
+                tiempos: tiempos.slice(),
+                concentraciones: concentraciones.map(fila => fila.slice()),
+                reactivoBase,
+                unidadTiempo,
+                unidadConcentracion
+            };
+
+            reconstruirGrafica();
         }
 
         // Función para limpiar la gráfica y los resultados
         function limpiar() {
-            if (grafica) grafica.destroy();  // Destruir la gráfica actual
+            if (grafica) {
+                grafica.destroy();  // Destruir la gráfica actual
+                grafica = null;
+            }
             document.getElementById('grafica').getContext('2d').clearRect(0, 0, 400, 400);  // Limpiar el canvas
             resultados = [];  // Borrar los resultados
+            datosSimulacion = null;
             const statusElement = document.getElementById('limitingStatus'); // === Isolation & limiting-reactant stop rule ===
             if (statusElement) {
-                statusElement.textContent = '';
+                statusElement.innerHTML = '';
             }
         }
 
