@@ -772,8 +772,16 @@
                         break;
                     }
 
-                    let pasoAdaptativo = Math.min(minimoTiempoHastaCero / 5, minimoTiempoHastaCero);
-                    pasoAdaptativo = Math.max(pasoAdaptativo, tolerancia);
+                    // === Robust auto step for n>1 (fractional limiter + dt cap) ===
+                    const idxLimitante = infoReactivoLimitante.idx;
+                    const concentracionLimitante = Math.max(estadoActual[idxLimitante], 0);
+                    const derivadaLimitante = Math.abs(derivadas[idxLimitante]) || 1e-300;
+                    const tiempoMinimoLimitante = concentracionLimitante / derivadaLimitante;
+                    const eta = 0.01;
+                    const pasoFraccional = eta * tiempoMinimoLimitante;
+                    const pasoMaximo = 30; // 30 segundos en el sistema interno de integración
+                    let pasoAdaptativo = Math.min(tiempoMinimoLimitante / 5, pasoFraccional, pasoMaximo);
+                    pasoAdaptativo = Math.max(pasoAdaptativo, tolerancia, 1e-8);
 
                     let siguienteEstado;
                     if (metodoIntegracion === 'euler') {
@@ -811,15 +819,34 @@
                     return;
                 }
 
+                // === Uniform time resampling (optional) ===
                 if (tiempos.length > pasos + 1) {
                     const nuevoTiempos = [];
                     const nuevoConcentraciones = [];
-                    const pasoMuestreo = (tiempos.length - 1) / pasos;
+                    const tiempoInicial = tiempos[0];
+                    const tiempoFinal = tiempos[tiempos.length - 1];
+                    let indiceBase = 0;
 
                     for (let i = 0; i <= pasos; i++) {
-                        const indice = Math.min(Math.round(i * pasoMuestreo), tiempos.length - 1);
-                        nuevoTiempos.push(tiempos[indice]);
-                        nuevoConcentraciones.push(concentraciones[indice]);
+                        const proporcion = i / pasos;
+                        const tiempoObjetivo = tiempoInicial + (tiempoFinal - tiempoInicial) * proporcion;
+
+                        while (indiceBase < tiempos.length - 2 && tiempos[indiceBase + 1] < tiempoObjetivo) {
+                            indiceBase++;
+                        }
+
+                        const tiempoA = tiempos[indiceBase];
+                        const tiempoB = tiempos[indiceBase + 1] ?? tiempoA;
+                        const peso = (tiempoB === tiempoA) ? 0 : (tiempoObjetivo - tiempoA) / (tiempoB - tiempoA);
+                        const concentracionA = concentraciones[indiceBase];
+                        const concentracionB = concentraciones[indiceBase + 1] ?? concentracionA;
+                        const interpolado = concentracionA.map((valor, idx) => {
+                            const valorB = concentracionB[idx] ?? valor;
+                            return valor * (1 - peso) + valorB * peso;
+                        });
+
+                        nuevoTiempos.push(tiempoObjetivo);
+                        nuevoConcentraciones.push(interpolado);
                     }
 
                     tiempos = nuevoTiempos;
