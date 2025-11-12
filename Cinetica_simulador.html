@@ -270,6 +270,20 @@
             return set;
         }
 
+        // === Catalyst feature ===
+        function getCatalystSet() {
+            const set = new Set();
+            document.querySelectorAll('.cbCatalyst').forEach((checkbox) => {
+                if (checkbox.checked) {
+                    const idx = parseInt(checkbox.dataset.idx, 10);
+                    if (!Number.isNaN(idx)) {
+                        set.add(idx);
+                    }
+                }
+            });
+            return set;
+        }
+
         // === Isolation & limiting-reactant stop rule ===
         function obtenerParametrosReactivos() {
             const numReactivos = parseInt(document.getElementById('numReactivos').value, 10) || 0;
@@ -382,6 +396,36 @@
             buildIsolationSetValidated(coeficientes, concentraciones, opciones);
         }
 
+        // === Catalyst feature ===
+        function manejarCambioIsolationCheckbox(evento) {
+            const checkbox = evento.target;
+            if (!checkbox) return;
+            if (checkbox.checked) {
+                const idx = parseInt(checkbox.dataset.idx, 10);
+                const catalystCheckbox = document.querySelector(`.cbCatalyst[data-idx="${idx}"]`);
+                if (catalystCheckbox && catalystCheckbox.checked) {
+                    checkbox.checked = false;
+                    alert('A species cannot be both Isolation and Catalyst; kept Catalyst.');
+                }
+            }
+            manejarCambioIsolation();
+        }
+
+        // === Catalyst feature ===
+        function manejarCambioCatalystCheckbox(evento) {
+            const checkbox = evento.target;
+            if (!checkbox) return;
+            if (checkbox.checked) {
+                const idx = parseInt(checkbox.dataset.idx, 10);
+                const isolationCheckbox = document.querySelector(`.cbIsolation[data-idx="${idx}"]`);
+                if (isolationCheckbox && isolationCheckbox.checked) {
+                    isolationCheckbox.checked = false;
+                    alert('A species cannot be both Isolation and Catalyst; kept Catalyst.');
+                }
+            }
+            manejarCambioIsolation();
+        }
+
         // Actualiza el formulario según el número de reactivos
         function actualizarFormulario() {
             // === Isolation & limiting-reactant stop rule ===
@@ -395,7 +439,7 @@
             tabla.className = 'species-table';
 
             const thead = document.createElement('thead');
-            thead.innerHTML = '<tr><th>Especie</th><th>Orden</th><th>[A]<sub>0</sub></th><th>ν</th><th>Isolation</th></tr>';
+            thead.innerHTML = '<tr><th>Especie</th><th>Orden</th><th>[A]<sub>0</sub></th><th>ν</th><th>Isolation</th><th>Catalyst</th></tr>'; // === Catalyst feature ===
             tabla.appendChild(thead);
 
             const tbody = document.createElement('tbody');
@@ -442,9 +486,18 @@
                 checkboxIsolation.type = 'checkbox';
                 checkboxIsolation.className = 'cbIsolation';
                 checkboxIsolation.dataset.idx = i;
-                checkboxIsolation.addEventListener('change', () => manejarCambioIsolation());
+                checkboxIsolation.addEventListener('change', manejarCambioIsolationCheckbox); // === Catalyst feature ===
                 celdaIsolation.appendChild(checkboxIsolation);
                 fila.appendChild(celdaIsolation);
+
+                const celdaCatalyst = document.createElement('td'); // === Catalyst feature ===
+                const checkboxCatalyst = document.createElement('input'); // === Catalyst feature ===
+                checkboxCatalyst.type = 'checkbox'; // === Catalyst feature ===
+                checkboxCatalyst.className = 'cbCatalyst'; // === Catalyst feature ===
+                checkboxCatalyst.dataset.idx = i; // === Catalyst feature ===
+                checkboxCatalyst.addEventListener('change', manejarCambioCatalystCheckbox); // === Catalyst feature ===
+                celdaCatalyst.appendChild(checkboxCatalyst); // === Catalyst feature ===
+                fila.appendChild(celdaCatalyst); // === Catalyst feature ===
 
                 tbody.appendChild(fila);
 
@@ -496,8 +549,29 @@
                 coeficientesEstequiometricos.push(coeficiente);
             }
 
-            const concentracionesInicialesCopia = concentracionesIniciales.slice(); // === Isolation & limiting-reactant stop rule ===
-            const especiesConstantes = buildIsolationSetValidated(coeficientesEstequiometricos, concentracionesIniciales); // === Isolation & limiting-reactant stop rule ===
+            const C0 = concentracionesIniciales.slice(); // === Catalyst feature ===
+            const isolationSet = buildIsolationSetValidated(coeficientesEstequiometricos, concentracionesIniciales); // === Isolation & limiting-reactant stop rule ===
+            const catalystSet = getCatalystSet(); // === Catalyst feature ===
+
+            // === Catalyst feature ===
+            const indicesSuperpuestos = [];
+            isolationSet.forEach((idx) => {
+                if (catalystSet.has(idx)) {
+                    indicesSuperpuestos.push(idx);
+                }
+            });
+            if (indicesSuperpuestos.length > 0) {
+                indicesSuperpuestos.forEach((idx) => {
+                    isolationSet.delete(idx);
+                    const isolationCheckbox = document.querySelector(`.cbIsolation[data-idx="${idx}"]`);
+                    if (isolationCheckbox) {
+                        isolationCheckbox.checked = false;
+                    }
+                });
+                alert('A species cannot be both Isolation and Catalyst; kept Catalyst.');
+            }
+
+            const especiesConstantes = new Set([...isolationSet, ...catalystSet]); // === Catalyst feature ===
 
             // Conversión de unidades de la constante de velocidad
             let kConvertido = k;
@@ -533,7 +607,36 @@
                 .map((coef, idx) => ({ coef, idx }))
                 .filter(item => item.coef < 0);
 
-            const reactivosNoAislados = reactivosEstequiometricos.filter(item => !especiesConstantes.has(item.idx)); // === Isolation & limiting-reactant stop rule ===
+            let reactivosNoAislados = reactivosEstequiometricos.filter(item => !especiesConstantes.has(item.idx)); // === Catalyst feature ===
+            if (reactivosNoAislados.length === 0) { // === Catalyst feature ===
+                const candidatosCatalyst = reactivosEstequiometricos.filter(item => catalystSet.has(item.idx));
+                if (candidatosCatalyst.length > 0) {
+                    let mejor = null;
+                    candidatosCatalyst.forEach((item) => {
+                        const ratio = Math.abs(item.coef) > 0 ? Math.max(C0[item.idx], 0) / Math.abs(item.coef) : -Infinity;
+                        if (!mejor || ratio > mejor.ratio) {
+                            mejor = { idx: item.idx, ratio };
+                        }
+                    });
+                    if (mejor) {
+                        catalystSet.delete(mejor.idx);
+                        const catalystCheckbox = document.querySelector(`.cbCatalyst[data-idx="${mejor.idx}"]`);
+                        if (catalystCheckbox) {
+                            catalystCheckbox.checked = false;
+                        }
+                        alert('Al menos un reactivo debe permanecer libre. Se desmarcó el catalizador con mayor R_i para continuar.');
+                        reactivosNoAislados = reactivosEstequiometricos.filter(item => !isolationSet.has(item.idx) && !catalystSet.has(item.idx));
+                        especiesConstantes.clear();
+                        isolationSet.forEach(idx => especiesConstantes.add(idx));
+                        catalystSet.forEach(idx => especiesConstantes.add(idx));
+                    }
+                }
+            }
+
+            if (reactivosNoAislados.length === 0) { // === Catalyst feature ===
+                alert('Debe dejar al menos un reactivo que no sea aislado ni catalizador para continuar con la simulación.');
+                return;
+            }
             const fraccionRestanteLimitante = 1e-3; // === Isolation & limiting-reactant stop rule ===
             const umbralAbsolutoLimitante = 1e-9; // === Isolation & limiting-reactant stop rule ===
 
@@ -541,7 +644,7 @@
             if (reactivosNoAislados.length > 0) {
                 infoReactivoLimitante = reactivosNoAislados.reduce((limitante, item) => {
                     const coefAbs = Math.abs(item.coef);
-                    const concentracionInicial = Math.max(concentracionesInicialesCopia[item.idx], 0);
+                    const concentracionInicial = Math.max(C0[item.idx], 0); // === Catalyst feature ===
                     const ratio = coefAbs > 0 ? concentracionInicial / coefAbs : Infinity;
 
                     if (!limitante || ratio < limitante.ratio) {
@@ -568,8 +671,8 @@
             const calcularDerivadas = (estado) => {
                 // === Isolation & limiting-reactant stop rule ===
                 const concentracionesEfectivas = estado.map((valor, idx) => {
-                    if (especiesConstantes.has(idx)) {
-                        return Math.max(concentracionesInicialesCopia[idx], 0);
+                    if (isolationSet.has(idx) || catalystSet.has(idx)) { // === Catalyst feature ===
+                        return Math.max(C0[idx], 0); // === Catalyst feature ===
                     }
                     return Math.max(valor, 0);
                 });
@@ -633,7 +736,7 @@
                 // === Isolation & limiting-reactant stop rule ===
                 if (!infoReactivoLimitante) {
                     if (reactivosEstequiometricos.length > 0 && reactivosNoAislados.length === 0) {
-                        alert('Todos los reactivos han sido marcados como aislados. Debe dejar al menos un reactivo no aislado para determinar el reactivo limitante.');
+                        alert('Todos los reactivos han sido marcados como aislados o catalizadores. Debe dejar al menos un reactivo libre para determinar el reactivo limitante.'); // === Catalyst feature ===
                     } else {
                         alert('Debe definir al menos un reactivo con coeficiente estequiométrico negativo para identificar el reactivo limitante.');
                     }
@@ -765,15 +868,17 @@
                 razonDetencion = autoTiempo ? 'Integration completed' : 'User-defined final time'; // === Isolation & limiting-reactant stop rule ===
             }
 
-            const aislamientoLista = Array.from(especiesConstantes).sort((a, b) => a - b).map(idx => `Especie ${idx + 1}`); // === Isolation & limiting-reactant stop rule ===
-            const aislamientoTexto = aislamientoLista.length > 0 ? aislamientoLista.join(', ') : 'None'; // === Isolation & limiting-reactant stop rule ===
+            const aislamientoLista = Array.from(isolationSet).sort((a, b) => a - b).map(idx => `Especie ${idx + 1}`); // === Catalyst feature ===
+            const catalizadorLista = Array.from(catalystSet).sort((a, b) => a - b).map(idx => `Especie ${idx + 1}`); // === Catalyst feature ===
+            const aislamientoTexto = aislamientoLista.length > 0 ? aislamientoLista.join(', ') : 'None'; // === Catalyst feature ===
+            const catalizadorTexto = catalizadorLista.length > 0 ? catalizadorLista.join(', ') : 'None'; // === Catalyst feature ===
             const statusElement = document.getElementById('limitingStatus'); // === Isolation & limiting-reactant stop rule ===
             if (statusElement) {
                 if (infoReactivoLimitante) {
                     const conversionTexto = conversionLimitante !== null ? conversionLimitante.toFixed(4) : 'N/A';
-                    statusElement.textContent = `Limiting reactant: Especie ${infoReactivoLimitante.idx + 1}. Final conversion: ${conversionTexto}%. Stop reason: ${razonDetencion}. Isolation set: [${aislamientoTexto}].`;
+                    statusElement.textContent = `Limiting reactant: Especie ${infoReactivoLimitante.idx + 1}. Final conversion: ${conversionTexto}%. Stop reason: ${razonDetencion}. Isolation set: [${aislamientoTexto}]. Catalyst set: [${catalizadorTexto}].`; // === Catalyst feature ===
                 } else {
-                    statusElement.textContent = `Limiting reactant: N/A. Final conversion: N/A. Stop reason: ${razonDetencion}. Isolation set: [${aislamientoTexto}].`;
+                    statusElement.textContent = `Limiting reactant: N/A. Final conversion: N/A. Stop reason: ${razonDetencion}. Isolation set: [${aislamientoTexto}]. Catalyst set: [${catalizadorTexto}].`; // === Catalyst feature ===
                 }
             }
 
