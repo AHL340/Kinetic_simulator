@@ -162,9 +162,9 @@
             <div class="form-group">
                 <label for="unidadVelocidad">Unidad de constante de velocidad:</label>
                 <select id="unidadVelocidad">
-                    <option value="s">1/segundos</option>
-                    <option value="min">1/minutos</option>
-                    <option value="h">1/horas</option>
+                    <option value="s">segundos</option>
+                    <option value="min">minutos</option>
+                    <option value="h">horas</option>
                 </select>
             </div>
 
@@ -306,7 +306,7 @@
             if (preset === 'custom') {
                 const rawValue = document.getElementById('stopConvCustom')?.value || '99.9';
                 const parsed = parseFloat(rawValue);
-                const clamped = Math.min(99.99, Math.max(50, Number.isNaN(parsed) ? 99.9 : parsed));
+                const clamped = Math.min(99.99, Math.max(5, Number.isNaN(parsed) ? 99.9 : parsed));
                 return 1 - clamped / 100;
             }
             return (n_eff > 1) ? 0.05 : 0.001;
@@ -691,6 +691,20 @@
             const presetSeleccionado = document.getElementById('stopConvPreset')?.value || 'auto';
             const stopTargetPercent = (1 - fraccionRestanteLimitante) * 100; // Conversión objetivo expresada en %
             const stopTargetDescriptor = describirStopTarget(presetSeleccionado, n_eff, stopTargetPercent);
+            
+            // --- Eta adaptativo según la conversión objetivo ---
+            // stopTargetPercent está en %, p.ej. 5, 7, 95, 99.9
+            let etaAdaptativo;
+            if (stopTargetPercent <= 20) {
+            // Estudio de velocidades iniciales (0–20 %)
+            etaAdaptativo = 0.001;   // cambios muy pequeños -> muchos puntos
+            } else if (stopTargetPercent <= 90) {
+            // Conversiones intermedias
+            etaAdaptativo = 0.005;
+            } else {
+            // Conversiones altas (90–99.9 %)
+            etaAdaptativo = 0.01;
+            }
 
             let infoReactivoLimitante = null;
             if (reactivosNoAislados.length > 0) {
@@ -815,7 +829,7 @@
                 }
 
                 while (!finalizadoAutomaticamente && iteracion < maxIteraciones) {
-                    const tiemposHastaCero = indicesReactivos.map(({ idx }) => {
+                    const tiemposHastaCero = reactivosNoAislados.map(({ idx }) => {
                         const derivada = derivadas[idx];
                         if (derivada >= 0) return Infinity;
                         const concentracion = Math.max(estadoActual[idx], 0);
@@ -833,8 +847,7 @@
                     const concentracionLimitante = Math.max(estadoActual[idxLimitante], 0);
                     const derivadaLimitante = Math.abs(derivadas[idxLimitante]) || 1e-300;
                     const tiempoMinimoLimitante = concentracionLimitante / derivadaLimitante;
-                    const eta = 0.01;
-                    const pasoFraccional = eta * tiempoMinimoLimitante;
+                    const pasoFraccional = etaAdaptativo * tiempoMinimoLimitante;
                     const pasoMaximo = 30; // 30 segundos en el sistema interno de integración
                     let pasoAdaptativo = Math.min(tiempoMinimoLimitante / 5, pasoFraccional, pasoMaximo);
                     pasoAdaptativo = Math.max(pasoAdaptativo, tolerancia, 1e-8);
@@ -852,6 +865,10 @@
                     }
 
                     siguienteEstado = aplicarForzado(siguienteEstado);
+                    // --- Clamp para especies constantes (Isolation + Catalyst) ---
+                    siguienteEstado = siguienteEstado.map((c, i) =>
+                    especiesConstantes.has(i) ? C0[i] : c
+                    );
                     tiempoActual += pasoAdaptativo;
 
                     tiempos.push(tiempoActual);
@@ -897,9 +914,11 @@
                         const concentracionA = concentraciones[indiceBase];
                         const concentracionB = concentraciones[indiceBase + 1] ?? concentracionA;
                         const interpolado = concentracionA.map((valor, idx) => {
-                            const valorB = concentracionB[idx] ?? valor;
-                            return valor * (1 - peso) + valorB * peso;
-                        });
+                    // --- Mantener planas las especies constantes (sin interpolar) ---
+                        if (especiesConstantes.has(idx)) return C0[idx];
+                    const valorB = concentracionB[idx] ?? valor;
+                    return valor * (1 - peso) + valorB * peso;
+                    });
 
                         nuevoTiempos.push(tiempoObjetivo);
                         nuevoConcentraciones.push(interpolado);
@@ -924,6 +943,10 @@
                     }
 
                     siguienteEstado = aplicarForzado(siguienteEstado);
+                    // --- Clamp para especies constantes ---
+                    siguienteEstado = siguienteEstado.map((c, i) =>
+                    especiesConstantes.has(i) ? C0[i] : c
+                    );
                     tiempoActual += dt;
 
                     tiempos.push(tiempoActual);
@@ -1077,7 +1100,7 @@
         const manejarCambioStopCustom = () => {
             if (!stopConvCustomInput) return;
             const parsed = parseFloat(stopConvCustomInput.value);
-            const clamped = Math.min(99.99, Math.max(50, Number.isNaN(parsed) ? 99.9 : parsed));
+            const clamped = Math.min(99.99, Math.max(5, Number.isNaN(parsed) ? 99.9 : parsed));
             stopConvCustomInput.value = clamped;
         };
 
