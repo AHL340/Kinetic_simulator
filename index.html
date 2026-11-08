@@ -38,7 +38,6 @@
         .helper-text { font-size: .87rem; color: #425d69; margin: 7px 0 14px; }
         .status-line { font-size: .9rem; color: #31525f; overflow-wrap: anywhere; }
         .status-line:empty { display: none; }
-        .equation { padding: 9px 12px; border-left: 3px solid #007d70; background: #eef7f5; border-radius: 4px; }
         button { padding: 9px 12px; border-radius: 8px; border: 1px solid #aabdc3; background: #fff; cursor: pointer; font-weight: 650; }
         button:hover { background: #eaf4f2; }
         button.primary { color: white; background: #00695f; border-color: #00695f; }
@@ -71,9 +70,8 @@
                 <input type="number" id="numReactivos" value="1" min="1" max="20" onchange="actualizarFormulario()">
             </div>
 
-            <p class="helper-text equation"><strong>v = k ∏ Cᵢ<sup>nᵢ</sup></strong> · dCᵢ/dt = νᵢ v. Usa ν negativo para reactivos y positivo para productos. En 2A → B, ν<sub>A</sub> = −2.</p>
             <div id="reactivosForm"></div>
-            <p class="helper-text">El exceso se calcula de forma explícita. Marca <strong>Aislar</strong> para aproximar su concentración como constante (exceso estequiométrico ≥ 10:1). Marca <strong>Catalizador</strong> para mantener su concentración fija e incluirla en la ley según su orden.</p>
+            <p class="helper-text">Marca <strong>Aislar</strong> para aproximar su concentración como constante (exceso estequiométrico ≥ 10:1). Marca <strong>Catalizador</strong> para mantener su concentración fija e incluirla en la ley según su orden.</p>
 
             <div class="form-group">
                 <label for="k">Constante de velocidad (k)</label>
@@ -116,7 +114,6 @@
                 <input id="stopConvCustom" type="number" min="5" max="99.99" aria-label="Conversión personalizada en porcentaje" step="0.01" value="99.9" style="width:6em" disabled>
             </div>
 
-            <p class="helper-text">En modo automático se usa 99,9 % para orden efectivo ≤ 1 y 95 % para orden efectivo > 1. Elige un valor inferior al 100 % si el agotamiento es asintótico.</p>
 
             <div class="form-group">
                 <label for="unidadTiempo">Unidad de tiempo de reacción:</label>
@@ -631,7 +628,7 @@
         manejarCambioStopPreset();
     </script>
     <footer style="text-align:center; margin-top:40px; padding:10px; color:#666; font-size:0.9em;">
-    Simulador de cinética química desarrollado por <strong>Alberto Hernán-Gómez Robledo</strong> (2025).
+    Simulador de cinética química desarrollado por <strong>Alberto Hernán-Gómez Robledo</strong> (2027).
 </footer>
 </body>
 </html>
