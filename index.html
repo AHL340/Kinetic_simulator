@@ -2,170 +2,86 @@
 <!--
   Simulador de cinética química
   Autor: Alberto Hernán-Gómez Robledo
-    Año: 2025
+    Año: 2027
 -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Simulador de Cinética Química</title>
-    <script src="https://cdn.jsdelivr.net/npm/mathjs@11.2.1/lib/browser/math.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f9;
-            margin: 0;
-            padding: 20px;
-        }
-        .container {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: space-between;
-            gap: 20px;
-            max-width: 95%;
-            margin: 0 auto;
-        }
-        .left-panel, .right-panel {
-            background-color: white;
-            padding: 20px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-            border-radius: 8px;
-            flex: 1 1 320px;
-        }
-        .left-panel {
-            max-width: 420px;
-        }
-        .right-panel {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        input, select, button {
-            margin: 5px 0;
-            padding: 8px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            width: calc(100% - 20px);
-        }
-        input[type="checkbox"] {
-            width: auto;
-            margin-left: 0;
-        }
-        label {
-            font-weight: bold;
-            margin-top: 10px;
-            display: inline-block;
-        }
-        .form-group {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 10px;
-        }
-        .form-group label {
-            flex: 1;
-            margin-right: 10px;
-        }
-        /* === Isolation & limiting-reactant stop rule === */
-        .species-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 10px;
-        }
-        /* === Isolation & limiting-reactant stop rule === */
-        .species-table th, .species-table td {
-            border: 1px solid #ccc;
-            padding: 6px;
-            text-align: center;
-        }
-        /* === Isolation & limiting-reactant stop rule === */
-        .species-table input[type="number"] {
-            width: 100%;
-            box-sizing: border-box;
-        }
-        /* === Isolation & limiting-reactant stop rule === */
-        .status-line {
-            font-size: 0.95rem;
-            margin-top: 15px;
-            font-weight: bold;
-            color: #0a3d62;
-        }
-        .form-group input, .form-group select {
-            flex: 2;
-        }
-        button {
-            background-color: #005fcc;
-            color: #ffffff;
-            cursor: pointer;
-            border: none;
-            font-size: 16px;
-            transition: background-color 0.3s ease;
-        }
-        button:hover {
-            background-color: #004099;
-        }
-        input:focus, select:focus, button:focus {
-            outline: 3px solid #ffbf47;
-            outline-offset: 2px;
-        }
-        canvas {
-            width: 100%;
-            height: 600px; /* Aumentar la altura de la gráfica */
-        }
-        sub {
-            vertical-align: sub;
-            font-size: smaller;
-        }
-        .advanced-settings {
-            margin-top: 15px;
-        }
-        .button-group {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-        .button-group button {
-            flex: 1 1 150px;
-        }
-        .helper-text {
-            font-size: 0.9rem;
-            color: #1a1a1a;
-            margin-top: 10px;
-        }
-        @media (max-width: 900px) {
-            .container {
-                justify-content: center;
-            }
-            .left-panel, .right-panel {
-                max-width: 100%;
-            }
-            canvas {
-                height: 400px;
-            }
-        }
+        :root { color-scheme: light; font: 16px/1.5 system-ui, sans-serif; color: #19313d; background: #eef4f4; }
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: clamp(12px, 3vw, 36px); }
+        .masthead, .container, footer { max-width: 1300px; margin-inline: auto; }
+        .masthead { margin-bottom: 20px; }
+        .eyebrow { color: #00695f; font-size: .8rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; margin: 0 0 4px; }
+        h1, h2 { line-height: 1.15; margin: 0 0 12px; }
+        h1 { font-size: clamp(1.7rem, 4vw, 2.75rem); }
+        h2 { font-size: 1.24rem; }
+        .container { display: grid; grid-template-columns: minmax(300px, 420px) minmax(0, 1fr); gap: 20px; align-items: start; }
+        .left-panel, .right-panel { background: white; border: 1px solid #d1e0e2; border-radius: 16px; padding: clamp(14px, 2.5vw, 26px); min-width: 0; }
+        .form-group { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+        .form-group > label { flex: 1; }
+        .form-group > input:not([type=checkbox]), .form-group > select { flex: 1; min-width: 0; }
+        label, legend, summary { font-weight: 650; }
+        input, select, button { font: inherit; color: inherit; }
+        input:not([type=checkbox]), select { padding: 7px 9px; border: 1px solid #aabdc3; border-radius: 7px; background: white; }
+        input[type=checkbox] { accent-color: #00695f; width: 1.1rem; height: 1.1rem; margin: 0; vertical-align: middle; }
+        :focus-visible { outline: 3px solid #bf7200; outline-offset: 3px; }
+        .species { margin: 14px 0; padding: 12px; border: 1px solid #c9ddde; border-radius: 10px; background: #f5faf9; min-width: 0; }
+        .species legend { padding: 0 5px; color: #00695f; }
+        .species-values { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+        .species-values input { display: block; margin-top: 4px; width: 100%; min-width: 0; }
+        .species-flags { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 12px; }
+        .species-flags label { display: inline-flex; align-items: center; gap: 7px; min-height: 32px; }
+        .helper-text { font-size: .87rem; color: #425d69; margin: 7px 0 14px; }
+        .status-line { font-size: .9rem; color: #31525f; overflow-wrap: anywhere; }
+        .status-line:empty { display: none; }
+        .equation { padding: 9px 12px; border-left: 3px solid #007d70; background: #eef7f5; border-radius: 4px; }
+        button { padding: 9px 12px; border-radius: 8px; border: 1px solid #aabdc3; background: #fff; cursor: pointer; font-weight: 650; }
+        button:hover { background: #eaf4f2; }
+        button.primary { color: white; background: #00695f; border-color: #00695f; }
+        button.primary:hover { background: #00564e; }
+        button:disabled { color: #52656d; border-color: #d6e2e4; background: #f1f5f5; cursor: default; }
+        .button-group { justify-content: flex-start; flex-wrap: wrap; }
+        .button-group .primary { flex: 1 0 100%; }
+        .advanced-settings { border-top: 1px solid #d1e0e2; padding-top: 12px; margin-top: 14px; }
+        .advanced-settings summary { cursor: pointer; margin-bottom: 10px; }
+        .plot { width: 100%; min-height: 240px; display: grid; align-items: center; }
+        .plot svg { display: block; width: 100%; height: auto; }
+        .plot-empty { text-align: center; color: #425d69; background: #f5faf9; border: 1px dashed #aabdc3; border-radius: 10px; padding: 36px 16px; }
+        #limitingStatus { margin-top: 12px; }
+        @media (min-width: 801px) { .right-panel { position: sticky; top: 16px; } }
+        @media (max-width: 800px) { .container { grid-template-columns: minmax(0, 1fr); } }
     </style>
 </head>
 <body>
-    <div class="container" role="main" aria-labelledby="appTitle">
+    <header class="masthead">
+        <p class="eyebrow">Máster de Catálisis · Cinética química</p>
+        <h1>Simulador de cinética química</h1>
+    </header>
+    <div class="container" role="main" aria-label="Simulador de cinética química">
         <!-- Panel Izquierdo: Formulario -->
-        <div class="left-panel" role="form" aria-describedby="keyboardInstructions">
-            <h1 id="appTitle">Simulador de Cinética Química</h1>
+        <div class="left-panel" role="region" aria-labelledby="parametrosTitulo">
+            <h2 id="parametrosTitulo">Parámetros</h2>
 
             <div class="form-group">
-                <label for="numReactivos">Número de reactivos:</label>
-                <input type="number" id="numReactivos" value="1" min="1" onchange="actualizarFormulario()">
+                <label for="numReactivos">Número de especies</label>
+                <input type="number" id="numReactivos" value="1" min="1" max="20" onchange="actualizarFormulario()">
             </div>
 
-            <div id="reactivosForm" aria-live="polite"></div>
+            <p class="helper-text equation"><strong>v = k ∏ Cᵢ<sup>nᵢ</sup></strong> · dCᵢ/dt = νᵢ v. Usa ν negativo para reactivos y positivo para productos. En 2A → B, ν<sub>A</sub> = −2.</p>
+            <div id="reactivosForm"></div>
+            <p class="helper-text">El exceso se calcula de forma explícita. Marca <strong>Aislar</strong> para aproximar su concentración como constante (exceso estequiométrico ≥ 10:1). Marca <strong>Catalizador</strong> para mantener su concentración fija e incluirla en la ley según su orden.</p>
 
             <div class="form-group">
-                <label for="k">Constante de velocidad (k):</label>
-                <input type="number" id="k" value="0.6" step="0.01">
+                <label for="k">Constante de velocidad (k)</label>
+                <input type="number" id="k" value="0.6" min="0" step="any">
             </div>
 
             <div class="form-group">
-                <label for="unidadVelocidad">Unidad de constante de velocidad:</label>
+                <label for="unidadVelocidad">Base temporal de k</label>
                 <select id="unidadVelocidad">
                     <option value="s">segundos</option>
                     <option value="min">minutos</option>
@@ -173,29 +89,34 @@
                 </select>
             </div>
 
+            <p class="helper-text" id="unidadesK" aria-live="polite"></p>
+
             <div class="form-group">
                 <label for="tiempoFinal">Tiempo final (<i>t<sub>f</sub></i>):</label>
-                <input type="number" id="tiempoFinal" value="10" step="1">
+                <input type="number" id="tiempoFinal" value="10" min="0" step="any">
             </div>
 
             <div class="form-group">
                 <label>
                     <input type="checkbox" id="tiempoAutomatico">
-                    Calcular automáticamente el tiempo de reacción
+                    Calcular tiempo hasta la conversión objetivo
                 </label>
             </div>
 
             <div class="form-group" id="stopTargetControls" aria-live="polite">
-                <label for="stopConvPreset">Auto stop at:</label>
+                <label for="stopConvPreset">Conversión objetivo</label>
                 <select id="stopConvPreset">
-                    <option value="auto" selected>Auto (99.9% if n_eff ≤ 1; 95% if n_eff &gt; 1)</option>
-                    <option value="99.9">99.9%</option>
-                    <option value="99">99%</option>
-                    <option value="95">95%</option>
-                    <option value="custom">Custom</option>
+                    <option value="auto" selected>Automática</option>
+                    <option value="100">100 %</option>
+                    <option value="99.9">99,9 %</option>
+                    <option value="99">99 %</option>
+                    <option value="95">95 %</option>
+                    <option value="custom">Personalizada</option>
                 </select>
-                <input id="stopConvCustom" type="number" min="50" max="99.99" step="0.01" value="99.9" style="width:6em" disabled>
+                <input id="stopConvCustom" type="number" min="5" max="99.99" aria-label="Conversión personalizada en porcentaje" step="0.01" value="99.9" style="width:6em" disabled>
             </div>
+
+            <p class="helper-text">En modo automático se usa 99,9 % para orden efectivo ≤ 1 y 95 % para orden efectivo > 1. Elige un valor inferior al 100 % si el agotamiento es asintótico.</p>
 
             <div class="form-group">
                 <label for="unidadTiempo">Unidad de tiempo de reacción:</label>
@@ -221,14 +142,12 @@
             </div>
 
             <div class="form-group button-group" role="group" aria-label="Acciones del simulador">
-                <button onclick="simular()">Resolver y Representar</button>
+                <button class="primary" onclick="simular()">Simular</button>
                 <button onclick="limpiar()">Borrar Resultado</button>
-                <button onclick="descargarCSV()">Descargar CSV</button>
+                <button id="botonDescargarCSV" onclick="descargarCSV()" disabled>Descargar CSV</button>
             </div>
 
-            <p class="helper-text" id="keyboardInstructions">Usa la tecla Tab para navegar entre los controles y Enter o la barra espaciadora para activar los botones.</p>
             <!-- === Isolation & limiting-reactant stop rule === -->
-            <p id="limitingStatus" class="status-line" aria-live="polite"></p>
 
             <div class="form-group">
                 <label for="notacionDecimal">Notación decimal:</label>
@@ -248,16 +167,12 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="numPuntos">Puntos de cálculo:</label>
-                    <input type="number" id="numPuntos" value="200" min="10" step="10">
-                </div>
-                <div class="form-group">
-                    <label for="forzarNoNegativas">Forzar concentraciones no negativas:</label>
-                    <input type="checkbox" id="forzarNoNegativas" checked>
+                    <label for="numPuntos">Intervalos de salida</label>
+                    <input type="number" id="numPuntos" value="200" min="1" max="10000" step="1">
                 </div>
                 <!-- === Isolation & limiting-reactant stop rule === -->
                 <div class="form-group">
-                    <label for="salvaguardaDerivada">Detener si |dC<sub>lim</sub>/dt| ≤ 1e-12:</label>
+                    <label for="salvaguardaDerivada">Detener cuando la velocidad sea despreciable</label>
                     <input type="checkbox" id="salvaguardaDerivada">
                 </div>
             </details>
@@ -265,12 +180,15 @@
 
         <!-- Panel Derecho: Gráfica -->
         <div class="right-panel" role="region" aria-label="Gráfico de resultados">
-            <canvas id="grafica"></canvas>
+            <h2>Perfil de concentración</h2>
+            <p id="limitingStatus" class="status-line" aria-live="polite"></p>
+            <p id="resumenSimulacion" class="status-line" aria-live="polite"></p>
+            <div id="grafica" class="plot"><p class="plot-empty">Pulsa «Simular» para ver la concentración frente al tiempo.</p></div>
         </div>
     </div>
 
     <script>
-        let grafica;  // Variable para la gráfica
+        let cabeceraCSV = [];
         let resultados = [];  // Almacenar resultados para CSV
 
         // === Isolation & limiting-reactant stop rule ===
@@ -305,6 +223,7 @@
         function pickFracRest(n_eff) {
             // Decide the residual fraction of the limiting reactant based on user preference.
             const preset = document.getElementById('stopConvPreset')?.value || 'auto';
+            if (preset === '100') return 0;
             if (preset === '99.9') return 0.001;
             if (preset === '99') return 0.01;
             if (preset === '95') return 0.05;
@@ -317,135 +236,22 @@
             return (n_eff > 1) ? 0.05 : 0.001;
         }
 
-        // === Isolation & limiting-reactant stop rule ===
-        function formatStopPercentage(value) {
-            // Helper to keep at most three decimals without trailing zeros.
-            return parseFloat(value.toFixed(3)).toString();
-        }
-
-        // === Isolation & limiting-reactant stop rule ===
-        function describirStopTarget(preset, nEff, porcentaje) {
-            const porcentajeTexto = formatStopPercentage(porcentaje);
-            if (preset === 'auto') {
-                const modo = nEff > 1 ? 'auto, n_eff>1' : 'auto, n_eff≤1';
-                return `Stop target: ${porcentajeTexto}% (${modo})`;
-            }
-            if (preset === 'custom') {
-                return `Stop target: ${porcentajeTexto}% (manual custom)`;
-            }
-            return `Stop target: ${porcentajeTexto}% (manual)`;
-        }
-
-        // === Isolation & limiting-reactant stop rule ===
-        function obtenerParametrosReactivos() {
-            const numReactivos = parseInt(document.getElementById('numReactivos').value, 10) || 0;
-            const concentraciones = [];
-            const coeficientes = [];
-
-            for (let i = 0; i < numReactivos; i++) {
-                const conc = parseFloat(document.getElementById(`C0${i}`)?.value);
-                const coef = parseFloat(document.getElementById(`stoich${i}`)?.value);
-                concentraciones.push(Number.isNaN(conc) ? 0 : conc);
-                coeficientes.push(Number.isNaN(coef) ? 0 : coef);
-            }
-
-            return { concentraciones, coeficientes };
-        }
-
-        // === Isolation & limiting-reactant stop rule ===
-        function validateIsolation(coeficientes, concentraciones, isolationSet) {
-            const mensajes = [];
-            const validado = new Set(isolationSet);
-            const reactantes = [];
-            const razones = new Map();
-
-            coeficientes.forEach((coef, idx) => {
-                if (coef < 0) {
-                    const absCoef = Math.abs(coef);
-                    const conc = Math.max(concentraciones[idx] || 0, 0);
-                    const ratio = absCoef > 0 ? conc / absCoef : Infinity;
-                    reactantes.push(idx);
-                    razones.set(idx, ratio);
-                }
+        function manejarCambioIsolation() {
+            const catalizadores = getCatalystSet();
+            const reactivos = Array.from(document.querySelectorAll('.species'), (_, idx) => {
+                const concentracion = document.getElementById(`C0${idx}`).valueAsNumber;
+                const nu = document.getElementById(`stoich${idx}`).valueAsNumber;
+                return nu < 0 && concentracion >= 0 && !catalizadores.has(idx) ? concentracion / -nu : Infinity;
             });
-
-            if (reactantes.length === 0) {
-                return { validatedSet: validado, mensajes };
-            }
-
-            const noAislados = reactantes.filter(idx => !validado.has(idx));
-
-            if (noAislados.length === 0 && validado.size > 0) {
-                let mejor = null;
-                validado.forEach((idx) => {
-                    if (!razones.has(idx)) {
-                        return;
-                    }
-                    const ratio = razones.get(idx);
-                    if (!mejor || ratio > mejor.ratio) {
-                        mejor = { idx, ratio };
-                    }
-                });
-                validado.forEach((idx) => {
-                    if (!mejor || idx === mejor.idx) {
-                        return;
-                    }
-                    validado.delete(idx);
-                });
-                if (mejor && validado.size === reactantes.length) {
-                    validado.delete(mejor.idx);
-                    mensajes.push('No es posible aislar todos los reactivos. Se desmarcaron todas las especies para mantener al menos un reactivo no aislado.');
-                } else if (mejor) {
-                    mensajes.push(`No es posible aislar todos los reactivos. Solo se mantiene aislada la Especie ${mejor.idx + 1}.`);
-                } else {
-                    mensajes.push('No es posible aislar todos los reactivos. Se desmarcaron las selecciones.');
-                    validado.clear();
-                }
-                return { validatedSet: validado, mensajes };
-            }
-
-            if (noAislados.length > 0) {
-                const Rmin = Math.min(...noAislados.map(idx => razones.get(idx) ?? Infinity));
-                const especiesInvalidas = [];
-                validado.forEach((idx) => {
-                    if (!razones.has(idx)) {
-                        return;
-                    }
-                    const ratio = razones.get(idx);
-                    if (ratio < 10 * Rmin) {
-                        validado.delete(idx);
-                        especiesInvalidas.push(`Especie ${idx + 1}`);
-                    }
-                });
-                if (especiesInvalidas.length > 0) {
-                    mensajes.push(`Las siguientes especies no cumplen la condición 10:1 y fueron desmarcadas: ${especiesInvalidas.join(', ')}. Se requiere R_i ≥ 10 × R_min.`);
+            const minimo = Math.min(...reactivos);
+            for (const casilla of document.querySelectorAll('.cbIsolation:checked')) {
+                const inventario = reactivos[Number(casilla.dataset.idx)];
+                if (!Number.isFinite(inventario) || inventario <= minimo || inventario < 10 * minimo) {
+                    casilla.checked = false;
+                    alert('Para aislar una especie, debe ser un reactivo en exceso estequiométrico de al menos 10:1 respecto al limitante.');
                 }
             }
-
-            return { validatedSet: validado, mensajes };
-        }
-
-        // === Isolation & limiting-reactant stop rule ===
-        function buildIsolationSetValidated(coeficientes, concentraciones, opciones = {}) {
-            const aislamientoActual = getCheckedIsolationSet();
-            const { validatedSet, mensajes } = validateIsolation(coeficientes, concentraciones, aislamientoActual);
-
-            document.querySelectorAll('.cbIsolation').forEach((checkbox) => {
-                const idx = parseInt(checkbox.dataset.idx, 10);
-                checkbox.checked = validatedSet.has(idx);
-            });
-
-            if (mensajes.length > 0 && !opciones.silencioso) {
-                alert(mensajes.join('\n'));
-            }
-
-            return validatedSet;
-        }
-
-        // === Isolation & limiting-reactant stop rule ===
-        function manejarCambioIsolation(opciones = {}) {
-            const { concentraciones, coeficientes } = obtenerParametrosReactivos();
-            buildIsolationSetValidated(coeficientes, concentraciones, opciones);
+            return getCheckedIsolationSet();
         }
 
         // === Catalyst feature ===
@@ -457,7 +263,7 @@
                 const catalystCheckbox = document.querySelector(`.cbCatalyst[data-idx="${idx}"]`);
                 if (catalystCheckbox && catalystCheckbox.checked) {
                     checkbox.checked = false;
-                    alert('A species cannot be both Isolation and Catalyst; kept Catalyst.');
+                    alert('Una especie marcada como catalizador ya se mantiene a concentración constante.');
                 }
             }
             manejarCambioIsolation();
@@ -472,625 +278,309 @@
                 const isolationCheckbox = document.querySelector(`.cbIsolation[data-idx="${idx}"]`);
                 if (isolationCheckbox && isolationCheckbox.checked) {
                     isolationCheckbox.checked = false;
-                    alert('A species cannot be both Isolation and Catalyst; kept Catalyst.');
+                    alert('Una especie marcada como catalizador ya se mantiene a concentración constante.');
                 }
             }
             manejarCambioIsolation();
         }
 
-        // Actualiza el formulario según el número de reactivos
+        function actualizarUnidadesK() {
+            const ordenes = Array.from(document.querySelectorAll('[id^="orden"]'), campo => campo.valueAsNumber);
+            const unidad = document.getElementById('unidadConcentracion').value;
+            const tiempo = document.getElementById('unidadVelocidad').value;
+            const exponente = Number((1 - ordenes.reduce((suma, n) => suma + n, 0)).toPrecision(12));
+            document.getElementById('unidadesK').textContent = Number.isFinite(exponente)
+                ? `Unidades de k: ${exponente === 0 ? '' : exponente === 1 ? unidad + ' · ' : unidad + '^(' + exponente.toLocaleString('es-ES') + ') · '}${tiempo}⁻¹.`
+                : 'Las unidades de k dependen del orden total.';
+        }
+
         function actualizarFormulario() {
-            // === Isolation & limiting-reactant stop rule ===
-            const numReactivos = parseInt(document.getElementById('numReactivos').value, 10) || 0;
-            const reactivosForm = document.getElementById('reactivosForm');
-            const reactivoBaseSelect = document.getElementById('reactivoBase');
-            reactivosForm.innerHTML = '';
-            reactivoBaseSelect.innerHTML = '';
-
-            const tabla = document.createElement('table');
-            tabla.className = 'species-table';
-
-            const thead = document.createElement('thead');
-            thead.innerHTML = '<tr><th>Especie</th><th>Orden</th><th>[A]<sub>0</sub></th><th>ν</th><th>Isolation</th><th>Catalyst</th></tr>'; // === Catalyst feature ===
-            tabla.appendChild(thead);
-
-            const tbody = document.createElement('tbody');
-
-            for (let i = 0; i < numReactivos; i++) {
-                const fila = document.createElement('tr');
-
-                const celdaNombre = document.createElement('td');
-                celdaNombre.textContent = `Especie ${i + 1}`;
-                fila.appendChild(celdaNombre);
-
-                const celdaOrden = document.createElement('td');
-                const inputOrden = document.createElement('input');
-                inputOrden.type = 'number';
-                inputOrden.id = `orden${i}`;
-                inputOrden.value = '1';
-                inputOrden.step = '0.1';
-                inputOrden.addEventListener('input', () => manejarCambioIsolation({ silencioso: true }));
-                celdaOrden.appendChild(inputOrden);
-                fila.appendChild(celdaOrden);
-
-                const celdaConcentracion = document.createElement('td');
-                const inputConcentracion = document.createElement('input');
-                inputConcentracion.type = 'number';
-                inputConcentracion.id = `C0${i}`;
-                inputConcentracion.value = '1';
-                inputConcentracion.step = '0.1';
-                inputConcentracion.addEventListener('input', () => manejarCambioIsolation({ silencioso: true }));
-                celdaConcentracion.appendChild(inputConcentracion);
-                fila.appendChild(celdaConcentracion);
-
-                const celdaStoich = document.createElement('td');
-                const inputStoich = document.createElement('input');
-                inputStoich.type = 'number';
-                inputStoich.id = `stoich${i}`;
-                inputStoich.value = '-1';
-                inputStoich.step = '0.1';
-                inputStoich.addEventListener('input', () => manejarCambioIsolation({ silencioso: true }));
-                celdaStoich.appendChild(inputStoich);
-                fila.appendChild(celdaStoich);
-
-                const celdaIsolation = document.createElement('td');
-                const checkboxIsolation = document.createElement('input');
-                checkboxIsolation.type = 'checkbox';
-                checkboxIsolation.className = 'cbIsolation';
-                checkboxIsolation.dataset.idx = i;
-                checkboxIsolation.addEventListener('change', manejarCambioIsolationCheckbox); // === Catalyst feature ===
-                celdaIsolation.appendChild(checkboxIsolation);
-                fila.appendChild(celdaIsolation);
-
-                const celdaCatalyst = document.createElement('td'); // === Catalyst feature ===
-                const checkboxCatalyst = document.createElement('input'); // === Catalyst feature ===
-                checkboxCatalyst.type = 'checkbox'; // === Catalyst feature ===
-                checkboxCatalyst.className = 'cbCatalyst'; // === Catalyst feature ===
-                checkboxCatalyst.dataset.idx = i; // === Catalyst feature ===
-                checkboxCatalyst.addEventListener('change', manejarCambioCatalystCheckbox); // === Catalyst feature ===
-                celdaCatalyst.appendChild(checkboxCatalyst); // === Catalyst feature ===
-                fila.appendChild(celdaCatalyst); // === Catalyst feature ===
-
-                tbody.appendChild(fila);
-
-                reactivoBaseSelect.innerHTML += `<option value="${i}">Especie ${i + 1}</option>`;
+            const campo = document.getElementById('numReactivos');
+            const cantidad = Number.isInteger(campo.valueAsNumber) ? Math.min(20, Math.max(1, campo.valueAsNumber)) : 1;
+            campo.value = cantidad;
+            const formulario = document.getElementById('reactivosForm');
+            const selector = document.getElementById('reactivoBase');
+            while (formulario.children.length > cantidad) {
+                formulario.lastElementChild.remove();
+                selector.lastElementChild.remove();
             }
-
-            tabla.appendChild(tbody);
-            reactivosForm.appendChild(tabla);
-
-            manejarCambioIsolation();
+            for (let i = formulario.children.length; i < cantidad; i++) {
+                const ficha = document.createElement('fieldset');
+                ficha.className = 'species';
+                ficha.innerHTML = `
+                    <legend>Especie ${i + 1}</legend>
+                    <div class="species-values">
+                        <label>Orden <input type="number" id="orden${i}" value="1" step="any"></label>
+                        <label>C₀ <input type="number" id="C0${i}" value="1" min="0" step="any"></label>
+                        <label>ν <input type="number" id="stoich${i}" value="-1" step="any"></label>
+                    </div>
+                    <div class="species-flags">
+                        <label><input type="checkbox" class="cbIsolation" data-idx="${i}"> Aislar</label>
+                        <label><input type="checkbox" class="cbCatalyst" data-idx="${i}"> Catalizador</label>
+                    </div>`;
+                ficha.querySelector('.cbIsolation').addEventListener('change', manejarCambioIsolationCheckbox);
+                ficha.querySelector('.cbCatalyst').addEventListener('change', manejarCambioCatalystCheckbox);
+                formulario.appendChild(ficha);
+                selector.add(new Option(`Especie ${i + 1}`, i));
+            }
+            actualizarUnidadesK();
         }
 
-        // Función para resolver las ecuaciones y graficar los resultados
         function simular() {
-            const numReactivos = parseInt(document.getElementById('numReactivos').value, 10);
-            const k = parseFloat(document.getElementById('k').value);
-            const unidadVelocidad = document.getElementById('unidadVelocidad').value;
-            const tiempoFinal = parseFloat(document.getElementById('tiempoFinal').value);
-            const unidadTiempo = document.getElementById('unidadTiempo').value;
-            const unidadConcentracion = document.getElementById('unidadConcentracion').value;
-            const reactivoBase = parseInt(document.getElementById('reactivoBase').value);
-            const metodoIntegracion = document.getElementById('metodoIntegracion').value;
-            const numPuntos = parseInt(document.getElementById('numPuntos').value, 10);
-            const forzarNoNegativas = document.getElementById('forzarNoNegativas').checked;
-            const autoTiempo = document.getElementById('tiempoAutomatico').checked;
-            const usarSalvaguardaDerivada = document.getElementById('salvaguardaDerivada').checked; // === Isolation & limiting-reactant stop rule ===
+            limpiar();
+            const campo = id => document.getElementById(id);
+            const aviso = campo('resumenSimulacion');
+            const avisar = mensaje => { aviso.textContent = mensaje; };
+            const cantidad = campo('numReactivos').valueAsNumber;
+            const k = campo('k').valueAsNumber;
+            const tiempoFinal = campo('tiempoFinal').valueAsNumber;
+            const intervalos = campo('numPuntos').valueAsNumber;
+            const auto = campo('tiempoAutomatico').checked;
+            const unidadC = campo('unidadConcentracion').value;
+            const unidadT = campo('unidadTiempo').value;
+            const unidadK = campo('unidadVelocidad').value;
+            const aSegundos = {s: 1, min: 60, h: 3600};
+            const esEuler = campo('metodoIntegracion').value === 'euler';
 
-            if (isNaN(numPuntos) || numPuntos < 1) {
-                alert('El número de puntos de cálculo debe ser un entero positivo.');
-                return;
+            if (!Number.isInteger(cantidad) || cantidad < 1 || cantidad > 20 ||
+                !Number.isInteger(intervalos) || intervalos < 1 || intervalos > 10000) {
+                return avisar('Indica de 1 a 20 especies y de 1 a 10 000 intervalos de salida.');
             }
+            if (!Number.isFinite(k) || k < 0) return avisar('Introduce una constante k finita y no negativa.');
+            const fin = tiempoFinal * aSegundos[unidadT];
+            if (!auto && (!Number.isFinite(fin) || fin <= 0)) return avisar('Introduce un tiempo final positivo y finito.');
 
-            let ordenes = [];
-            let concentracionesIniciales = [];
-            let coeficientesEstequiometricos = [];
-
-            for (let i = 0; i < numReactivos; i++) {
-                const orden = parseFloat(document.getElementById(`orden${i}`).value);
-                const concentracionInicial = parseFloat(document.getElementById(`C0${i}`).value);
-                const coeficiente = parseFloat(document.getElementById(`stoich${i}`).value);
-
-                if (isNaN(orden) || isNaN(concentracionInicial) || isNaN(coeficiente)) {
-                    alert(`Todos los parámetros del reactivo ${i + 1} deben ser valores numéricos.`);
-                    return;
+            const especies = Array.from({length: cantidad}, (_, i) => ({
+                orden: campo(`orden${i}`).valueAsNumber,
+                inicial: campo(`C0${i}`).valueAsNumber,
+                nu: campo(`stoich${i}`).valueAsNumber
+            }));
+            for (const [i, {orden, inicial, nu}] of especies.entries()) {
+                if (![orden, inicial, nu].every(Number.isFinite) || inicial < 0) {
+                    return avisar(`Revisa la especie ${i + 1}. Introduce valores finitos y una concentración inicial no negativa.`);
                 }
-
-                ordenes.push(orden);
-                concentracionesIniciales.push(concentracionInicial);
-                coeficientesEstequiometricos.push(coeficiente);
-            }
-
-            const C0 = concentracionesIniciales.slice(); // === Catalyst feature ===
-            const isolationSet = buildIsolationSetValidated(coeficientesEstequiometricos, concentracionesIniciales); // === Isolation & limiting-reactant stop rule ===
-            const catalystSet = getCatalystSet(); // === Catalyst feature ===
-
-            // === Catalyst feature ===
-            const indicesSuperpuestos = [];
-            isolationSet.forEach((idx) => {
-                if (catalystSet.has(idx)) {
-                    indicesSuperpuestos.push(idx);
-                }
-            });
-            if (indicesSuperpuestos.length > 0) {
-                indicesSuperpuestos.forEach((idx) => {
-                    isolationSet.delete(idx);
-                    const isolationCheckbox = document.querySelector(`.cbIsolation[data-idx="${idx}"]`);
-                    if (isolationCheckbox) {
-                        isolationCheckbox.checked = false;
-                    }
-                });
-                alert('A species cannot be both Isolation and Catalyst; kept Catalyst.');
-            }
-
-            const especiesConstantes = new Set([...isolationSet, ...catalystSet]); // === Catalyst feature ===
-
-            // Conversión de unidades de la constante de velocidad
-            let kConvertido = k;
-            if (unidadVelocidad === 'min') {
-                kConvertido = k / 60;  // Convertir de 1/minutos a 1/segundos
-            } else if (unidadVelocidad === 'h') {
-                kConvertido = k / 3600;  // Convertir de 1/horas a 1/segundos
-            }
-
-            if (!autoTiempo && (isNaN(tiempoFinal) || tiempoFinal <= 0)) {
-                alert('El tiempo final debe ser un número positivo.');
-                return;
-            }
-
-            // Conversión de tiempo de reacción a segundos
-            let tiempoFinalSegundos = null;
-            if (!autoTiempo) {
-                tiempoFinalSegundos = tiempoFinal;
-                if (unidadTiempo === 'min') {
-                    tiempoFinalSegundos = tiempoFinal * 60;  // Convertir de minutos a segundos
-                } else if (unidadTiempo === 'h') {
-                    tiempoFinalSegundos = tiempoFinal * 3600;  // Convertir de horas a segundos
+                if (inicial === 0 && orden < 0) {
+                    return avisar(`La ley de velocidad no está definida para la especie ${i + 1}: C₀ = 0 y orden negativo.`);
                 }
             }
 
-            // Resolver ecuaciones diferenciales para cada reactivo usando el método seleccionado
-            const pasos = Math.max(numPuntos, 1);
-            const dt = autoTiempo || tiempoFinalSegundos === null ? null : tiempoFinalSegundos / pasos;
-            let tiempos = [];
-            let concentraciones = [];
-
-            const reactivosEstequiometricos = coeficientesEstequiometricos
-                .map((coef, idx) => ({ coef, idx }))
-                .filter(item => item.coef < 0);
-
-            let reactivosNoAislados = reactivosEstequiometricos.filter(item => !especiesConstantes.has(item.idx)); // === Catalyst feature ===
-            if (reactivosNoAislados.length === 0) { // === Catalyst feature ===
-                const candidatosCatalyst = reactivosEstequiometricos.filter(item => catalystSet.has(item.idx));
-                if (candidatosCatalyst.length > 0) {
-                    let mejor = null;
-                    candidatosCatalyst.forEach((item) => {
-                        const ratio = Math.abs(item.coef) > 0 ? Math.max(C0[item.idx], 0) / Math.abs(item.coef) : -Infinity;
-                        if (!mejor || ratio > mejor.ratio) {
-                            mejor = { idx: item.idx, ratio };
-                        }
-                    });
-                    if (mejor) {
-                        catalystSet.delete(mejor.idx);
-                        const catalystCheckbox = document.querySelector(`.cbCatalyst[data-idx="${mejor.idx}"]`);
-                        if (catalystCheckbox) {
-                            catalystCheckbox.checked = false;
-                        }
-                        alert('Al menos un reactivo debe permanecer libre. Se desmarcó el catalizador con mayor R_i para continuar.');
-                        reactivosNoAislados = reactivosEstequiometricos.filter(item => !isolationSet.has(item.idx) && !catalystSet.has(item.idx));
-                        especiesConstantes.clear();
-                        isolationSet.forEach(idx => especiesConstantes.add(idx));
-                        catalystSet.forEach(idx => especiesConstantes.add(idx));
-                    }
-                }
+            const aisladas = manejarCambioIsolation();
+            const catalizadores = getCatalystSet();
+            const constantes = new Set([...aisladas, ...catalizadores]);
+            const coeficientes = especies.map(({nu}, i) => constantes.has(i) ? 0 : nu);
+            const inventarios = especies.map(({inicial}, i) => coeficientes[i] < 0 ? inicial / -coeficientes[i] : Infinity);
+            const agotamiento = Math.min(...inventarios);
+            if (!Number.isFinite(agotamiento)) return avisar('Debe haber al menos un reactivo con ν negativo cuya concentración pueda variar.');
+            const limitante = inventarios.indexOf(agotamiento);
+            const ordenEfectivo = especies.reduce((suma, {orden}, i) => suma + (coeficientes[i] < 0 ? Math.max(orden, 0) : 0), 0);
+            const objetivo = 1 - pickFracRest(ordenEfectivo);
+            const avanceObjetivo = agotamiento * objetivo;
+            const ordenAlAgotarse = especies.reduce((suma, {orden}, i) =>
+                inventarios[i] === agotamiento ? suma + orden : suma, 0);
+            if (auto && objetivo === 1 && agotamiento > 0 && ordenAlAgotarse >= 1) {
+                return avisar('El 100 % solo se alcanza en el límite para esta ley de velocidad. Selecciona una conversión inferior, por ejemplo el 99,9 %.');
             }
+            const salvaguarda = campo('salvaguardaDerivada').checked;
 
-            if (reactivosNoAislados.length === 0) { // === Catalyst feature ===
-                alert('Debe dejar al menos un reactivo que no sea aislado ni catalizador para continuar con la simulación.');
-                return;
-            }
-            const activeReactants = reactivosNoAislados.map(item => item.idx); // === Isolation & limiting-reactant stop rule ===
-            const n_eff = activeReactants.reduce((acc, idx) => acc + Math.max(ordenes[idx] || 0, 0), 0); // Suma de órdenes activos
-            const fraccionRestanteLimitante = pickFracRest(n_eff); // === Isolation & limiting-reactant stop rule ===
-            const umbralAbsolutoLimitante = 1e-9; // === Isolation & limiting-reactant stop rule ===
-            const presetSeleccionado = document.getElementById('stopConvPreset')?.value || 'auto';
-            const stopTargetPercent = (1 - fraccionRestanteLimitante) * 100; // Conversión objetivo expresada en %
-            const stopTargetDescriptor = describirStopTarget(presetSeleccionado, n_eff, stopTargetPercent);
-            
-            // --- Eta adaptativo según la conversión objetivo ---
-            // stopTargetPercent está en %, p.ej. 5, 7, 95, 99.9
-            let etaAdaptativo;
-            if (stopTargetPercent <= 20) {
-            // Estudio de velocidades iniciales (0–20 %)
-            etaAdaptativo = 0.001;   // cambios muy pequeños -> muchos puntos
-            } else if (stopTargetPercent <= 90) {
-            // Conversiones intermedias
-            etaAdaptativo = 0.005;
-            } else {
-            // Conversiones altas (90–99.9 %)
-            etaAdaptativo = 0.01;
-            }
-
-            let infoReactivoLimitante = null;
-            if (reactivosNoAislados.length > 0) {
-                infoReactivoLimitante = reactivosNoAislados.reduce((limitante, item) => {
-                    const coefAbs = Math.abs(item.coef);
-                    const concentracionInicial = Math.max(C0[item.idx], 0); // === Catalyst feature ===
-                    const ratio = coefAbs > 0 ? concentracionInicial / coefAbs : Infinity;
-
-                    if (!limitante || ratio < limitante.ratio) {
-                        return {
-                            idx: item.idx,
-                            coef: item.coef,
-                            ratio,
-                            concentracionInicial,
-                        };
-                    }
-                    return limitante;
-                }, null);
-
-                if (infoReactivoLimitante) {
-                    infoReactivoLimitante.umbralRelativo = infoReactivoLimitante.concentracionInicial * fraccionRestanteLimitante;
-                    infoReactivoLimitante.umbralAbsoluto = umbralAbsolutoLimitante;
-                    infoReactivoLimitante.fraccionRestante = fraccionRestanteLimitante;
-                    infoReactivoLimitante.stopTargetDescriptor = stopTargetDescriptor;
-                    infoReactivoLimitante.stopTargetPercent = stopTargetPercent;
-                    infoReactivoLimitante.stopTargetPreset = presetSeleccionado;
-                    infoReactivoLimitante.n_eff = n_eff;
-                }
-            }
-
-            let conversionLimitante = null;
-            let razonDetencion = null; // === Isolation & limiting-reactant stop rule ===
-
-            const calcularDerivadas = (estado) => {
-                // === Isolation & limiting-reactant stop rule ===
-                const concentracionesEfectivas = estado.map((valor, idx) => {
-                    if (isolationSet.has(idx) || catalystSet.has(idx)) { // === Catalyst feature ===
-                        return Math.max(C0[idx], 0); // === Catalyst feature ===
-                    }
-                    return Math.max(valor, 0);
-                });
-                const producto = concentracionesEfectivas.reduce((acc, C, idx) => acc * Math.pow(C, ordenes[idx]), 1);
-                const velocidad = kConvertido * producto;
-                return estado.map((_, idx) => {
-                    if (especiesConstantes.has(idx)) {
-                        return 0;
-                    }
-                    return coeficientesEstequiometricos[idx] * velocidad;
-                });
+            // Integrar un único avance por volumen conserva los cocientes estequiométricos.
+            const concentracion = (avance, i) => coeficientes[i] < 0
+                ? -coeficientes[i] * Math.max(0, inventarios[i] - avance)
+                : especies[i].inicial + coeficientes[i] * avance;
+            const velocidad = avance => {
+                if (avance < 0 || avance > agotamiento) return NaN;
+                return especies.reduce((v, {orden}, i) => v * concentracion(avance, i) ** orden, k / aSegundos[unidadK]);
+            };
+            const paso = (avance, dt, v) => {
+                if (esEuler) return avance + dt * v;
+                const v2 = velocidad(avance + dt * v / 2);
+                const v3 = velocidad(avance + dt * v2 / 2);
+                const v4 = velocidad(avance + dt * v3);
+                return avance + dt * (v + 2 * v2 + 2 * v3 + v4) / 6;
             };
 
-            const evaluarCriteriosLimite = (estado, derivadasLocales) => {
-                // === Isolation & limiting-reactant stop rule ===
-                if (!infoReactivoLimitante) {
-                    return { detener: false };
-                }
-                const indice = infoReactivoLimitante.idx;
-                const concentracion = Math.max(estado[indice], 0);
-                const umbralRelativo = infoReactivoLimitante.umbralRelativo;
-                const umbralAbsoluto = infoReactivoLimitante.umbralAbsoluto;
-                const derivadaAbs = Math.abs(derivadasLocales[indice] || 0);
-
-                let razon = null;
-                if (concentracion <= umbralRelativo) {
-                    razon = 'Stop target reached';
-                } else if (concentracion <= umbralAbsoluto) {
-                    razon = 'Absolute safety floor';
-                } else if (usarSalvaguardaDerivada && derivadaAbs <= 1e-12) {
-                    razon = 'Derivative safeguard';
-                }
-
-                if (!razon) {
-                    return { detener: false };
-                }
-
-                let conversion = 0;
-                if (infoReactivoLimitante.concentracionInicial > 0) {
-                    conversion = (1 - (concentracion / infoReactivoLimitante.concentracionInicial)) * 100;
-                } else {
-                    conversion = concentracion === 0 ? 100 : 0;
-                }
-                conversion = Math.max(0, Math.min(100, conversion));
-
-                return { detener: true, razon, conversion };
+            const dosMediosPasos = (avance, dt, v) => {
+                const mitad = paso(avance, dt / 2, v);
+                return paso(mitad, dt / 2, velocidad(mitad));
             };
 
-            const aplicarForzado = (estado) => {
-                if (!forzarNoNegativas) return estado;
-                return estado.map(valor => Math.max(valor, 0));
-            };
-
-            let estadoActual = concentracionesIniciales.slice();
-            let tiempoActual = 0;
-
-            tiempos.push(tiempoActual);
-            concentraciones.push(estadoActual.slice());
-
-            if (autoTiempo) {
-                // === Isolation & limiting-reactant stop rule ===
-                if (!infoReactivoLimitante) {
-                    if (reactivosEstequiometricos.length > 0 && reactivosNoAislados.length === 0) {
-                        alert('Todos los reactivos han sido marcados como aislados o catalizadores. Debe dejar al menos un reactivo libre para determinar el reactivo limitante.'); // === Catalyst feature ===
-                    } else {
-                        alert('Debe definir al menos un reactivo con coeficiente estequiométrico negativo para identificar el reactivo limitante.');
-                    }
-                    return;
-                }
-
-                const indicesReactivos = reactivosEstequiometricos;
-                const tolerancia = 1e-8;
-                const maxIteraciones = Math.max(pasos * 20, 1000);
-                let iteracion = 0;
-                let finalizadoAutomaticamente = false;
-
-                let derivadas = calcularDerivadas(estadoActual);
-                let evaluacion = evaluarCriteriosLimite(estadoActual, derivadas); // === Isolation & limiting-reactant stop rule ===
-                if (evaluacion.detener) {
-                    conversionLimitante = evaluacion.conversion;
-                    razonDetencion = evaluacion.razon;
-                    tiempoFinalSegundos = tiempoActual;
-                    finalizadoAutomaticamente = true;
-                }
-
-                while (!finalizadoAutomaticamente && iteracion < maxIteraciones) {
-                    const tiemposHastaCero = reactivosNoAislados.map(({ idx }) => {
-                        const derivada = derivadas[idx];
-                        if (derivada >= 0) return Infinity;
-                        const concentracion = Math.max(estadoActual[idx], 0);
-                        return concentracion / Math.abs(derivada);
-                    });
-
-                    const minimoTiempoHastaCero = Math.min(...tiemposHastaCero);
-
-                    if (!isFinite(minimoTiempoHastaCero) || minimoTiempoHastaCero === Infinity) {
-                        break;
-                    }
-
-                    // === Robust auto step for n>1 (fractional limiter + dt cap) ===
-                    const idxLimitante = infoReactivoLimitante.idx;
-                    const concentracionLimitante = Math.max(estadoActual[idxLimitante], 0);
-                    const derivadaLimitante = Math.abs(derivadas[idxLimitante]) || 1e-300;
-                    const tiempoMinimoLimitante = concentracionLimitante / derivadaLimitante;
-                    const pasoFraccional = etaAdaptativo * tiempoMinimoLimitante;
-                    const pasoMaximo = 30; // 30 segundos en el sistema interno de integración
-                    let pasoAdaptativo = Math.min(tiempoMinimoLimitante / 5, pasoFraccional, pasoMaximo);
-                    pasoAdaptativo = Math.max(pasoAdaptativo, tolerancia, 1e-8);
-
-                    let siguienteEstado;
-                    if (metodoIntegracion === 'euler') {
-                        const k1 = derivadas;
-                        siguienteEstado = estadoActual.map((c, idx) => c + k1[idx] * pasoAdaptativo);
-                    } else {
-                        const k1 = derivadas;
-                        const k2 = calcularDerivadas(estadoActual.map((c, idx) => c + 0.5 * pasoAdaptativo * k1[idx]));
-                        const k3 = calcularDerivadas(estadoActual.map((c, idx) => c + 0.5 * pasoAdaptativo * k2[idx]));
-                        const k4 = calcularDerivadas(estadoActual.map((c, idx) => c + pasoAdaptativo * k3[idx]));
-                        siguienteEstado = estadoActual.map((c, idx) => c + (pasoAdaptativo / 6) * (k1[idx] + 2 * k2[idx] + 2 * k3[idx] + k4[idx]));
-                    }
-
-                    siguienteEstado = aplicarForzado(siguienteEstado);
-                    // --- Clamp para especies constantes (Isolation + Catalyst) ---
-                    siguienteEstado = siguienteEstado.map((c, i) =>
-                    especiesConstantes.has(i) ? C0[i] : c
-                    );
-                    tiempoActual += pasoAdaptativo;
-
-                    tiempos.push(tiempoActual);
-                    concentraciones.push(siguienteEstado.slice());
-                    estadoActual = siguienteEstado;
-                    derivadas = calcularDerivadas(estadoActual);
-                    iteracion++;
-
-                    evaluacion = evaluarCriteriosLimite(estadoActual, derivadas);
-                    if (evaluacion.detener) {
-                        conversionLimitante = evaluacion.conversion;
-                        razonDetencion = evaluacion.razon;
-                        tiempoFinalSegundos = tiempoActual;
-                        finalizadoAutomaticamente = true;
-                        break;
-                    }
-                }
-
-                if (!finalizadoAutomaticamente) {
-                    alert('No fue posible determinar el tiempo de reacción automáticamente con los criterios de conversión establecidos. Revise los parámetros de entrada.');
-                    return;
-                }
-
-                // === Uniform time resampling (optional) ===
-                if (tiempos.length > pasos + 1) {
-                    const nuevoTiempos = [];
-                    const nuevoConcentraciones = [];
-                    const tiempoInicial = tiempos[0];
-                    const tiempoFinal = tiempos[tiempos.length - 1];
-                    let indiceBase = 0;
-
-                    for (let i = 0; i <= pasos; i++) {
-                        const proporcion = i / pasos;
-                        const tiempoObjetivo = tiempoInicial + (tiempoFinal - tiempoInicial) * proporcion;
-
-                        while (indiceBase < tiempos.length - 2 && tiempos[indiceBase + 1] < tiempoObjetivo) {
-                            indiceBase++;
+            let avance = 0;
+            let tiempo = 0;
+            let iteraciones = 0;
+            let motivo = auto ? 'Conversión objetivo alcanzada' : 'Tiempo fijado';
+            const trayectoria = [[0, 0]];
+            const tolerancia = esEuler ? 1e-5 : 1e-8;
+            const errorNumerico = 'No se pudo integrar la ley de velocidad con estos valores. Revisa las unidades y los parámetros.';
+            function avanzar(hasta) {
+                while (tiempo < hasta && (!auto || avance < avanceObjetivo)) {
+                    const restante = agotamiento - avance;
+                    const v = velocidad(avance);
+                    // Cerca del agotamiento, v es proporcional al restante elevado al orden residual.
+                    const cola = restante / ((1 - ordenAlAgotarse) * v);
+                    const colaIrresoluble = ordenAlAgotarse < 1 && cola > 0 &&
+                        cola <= 128 * Number.EPSILON * tiempo;
+                    if ((!auto || objetivo === 1) && (restante <= agotamiento * 1e-12 || colaIrresoluble)) {
+                        if (auto) {
+                            if (!Number.isFinite(cola) || cola <= 0 || !Number.isFinite(tiempo + cola)) {
+                                throw new Error(errorNumerico);
+                            }
+                            const finCola = tiempo + cola;
+                            if (finCola === tiempo) trayectoria.pop();
+                            tiempo = finCola;
+                            avance = agotamiento;
+                            trayectoria.push([tiempo, avance]);
+                        } else {
+                            avance = agotamiento;
+                            motivo = 'Reactivo limitante agotado dentro de la precisión numérica';
+                            tiempo = hasta;
                         }
-
-                        const tiempoA = tiempos[indiceBase];
-                        const tiempoB = tiempos[indiceBase + 1] ?? tiempoA;
-                        const peso = (tiempoB === tiempoA) ? 0 : (tiempoObjetivo - tiempoA) / (tiempoB - tiempoA);
-                        const concentracionA = concentraciones[indiceBase];
-                        const concentracionB = concentraciones[indiceBase + 1] ?? concentracionA;
-                        const interpolado = concentracionA.map((valor, idx) => {
-                    // --- Mantener planas las especies constantes (sin interpolar) ---
-                        if (especiesConstantes.has(idx)) return C0[idx];
-                    const valorB = concentracionB[idx] ?? valor;
-                    return valor * (1 - peso) + valorB * peso;
-                    });
-
-                        nuevoTiempos.push(tiempoObjetivo);
-                        nuevoConcentraciones.push(interpolado);
+                        return;
+                    }
+                    if (!Number.isFinite(v)) throw new Error(errorNumerico);
+                    if (auto && salvaguarda && -coeficientes[limitante] * v <= 1e-12) {
+                        motivo = 'Velocidad de consumo ≤ 10⁻¹² ' + unidadC + '/s';
+                        return;
+                    }
+                    if (v === 0) {
+                        if (auto) throw new Error('La velocidad es cero y la conversión objetivo no se alcanza con estos parámetros.');
+                        tiempo = hasta;
+                        return;
                     }
 
-                    tiempos = nuevoTiempos;
-                    concentraciones = nuevoConcentraciones;
-                }
-            } else {
-                for (let i = 0; i < pasos; i++) {
-                    let siguienteEstado;
-
-                    if (metodoIntegracion === 'euler') {
-                        const k1 = calcularDerivadas(estadoActual);
-                        siguienteEstado = estadoActual.map((c, idx) => c + k1[idx] * dt);
-                    } else {
-                        const k1 = calcularDerivadas(estadoActual);
-                        const k2 = calcularDerivadas(estadoActual.map((c, idx) => c + 0.5 * dt * k1[idx]));
-                        const k3 = calcularDerivadas(estadoActual.map((c, idx) => c + 0.5 * dt * k2[idx]));
-                        const k4 = calcularDerivadas(estadoActual.map((c, idx) => c + dt * k3[idx]));
-                        siguienteEstado = estadoActual.map((c, idx) => c + (dt / 6) * (k1[idx] + 2 * k2[idx] + 2 * k3[idx] + k4[idx]));
-                    }
-
-                    siguienteEstado = aplicarForzado(siguienteEstado);
-                    // --- Clamp para especies constantes ---
-                    siguienteEstado = siguienteEstado.map((c, i) =>
-                    especiesConstantes.has(i) ? C0[i] : c
-                    );
-                    tiempoActual += dt;
-
-                    tiempos.push(tiempoActual);
-                    concentraciones.push(siguienteEstado.slice());
-                    estadoActual = siguienteEstado;
-                }
-            }
-
-            if (infoReactivoLimitante && concentraciones.length > 0) {
-                const concentracionFinalLimitante = Math.max(concentraciones[concentraciones.length - 1][infoReactivoLimitante.idx], 0);
-                if (infoReactivoLimitante.concentracionInicial > 0) {
-                    conversionLimitante = Math.min(
-                        100,
-                        Math.max(
-                            0,
-                            (1 - (concentracionFinalLimitante / infoReactivoLimitante.concentracionInicial)) * 100
-                        )
-                    );
-                } else {
-                    conversionLimitante = concentracionFinalLimitante === 0 ? 100 : 0;
-                }
-            }
-
-            if (!razonDetencion) {
-                razonDetencion = autoTiempo ? 'Integration completed' : 'User-defined final time'; // === Isolation & limiting-reactant stop rule ===
-            }
-
-            const aislamientoLista = Array.from(isolationSet).sort((a, b) => a - b).map(idx => `Especie ${idx + 1}`); // === Catalyst feature ===
-            const catalizadorLista = Array.from(catalystSet).sort((a, b) => a - b).map(idx => `Especie ${idx + 1}`); // === Catalyst feature ===
-            const aislamientoTexto = aislamientoLista.length > 0 ? aislamientoLista.join(', ') : 'None'; // === Catalyst feature ===
-            const catalizadorTexto = catalizadorLista.length > 0 ? catalizadorLista.join(', ') : 'None'; // === Catalyst feature ===
-            const statusElement = document.getElementById('limitingStatus'); // === Isolation & limiting-reactant stop rule ===
-            if (statusElement) {
-                const stopNote = infoReactivoLimitante && infoReactivoLimitante.stopTargetDescriptor
-                    ? ` ${infoReactivoLimitante.stopTargetDescriptor}`
-                    : '';
-                if (infoReactivoLimitante) {
-                    const conversionTexto = conversionLimitante !== null ? conversionLimitante.toFixed(4) : 'N/A';
-                    statusElement.textContent = `Limiting reactant: Especie ${infoReactivoLimitante.idx + 1}. Final conversion: ${conversionTexto}%. Stop reason: ${razonDetencion}. Isolation set: [${aislamientoTexto}]. Catalyst set: [${catalizadorTexto}].${stopNote}`; // === Catalyst feature ===
-                } else {
-                    statusElement.textContent = `Limiting reactant: N/A. Final conversion: N/A. Stop reason: ${razonDetencion}. Isolation set: [${aislamientoTexto}]. Catalyst set: [${catalizadorTexto}].${stopNote}`; // === Catalyst feature ===
-                }
-            }
-
-            // Extraer las concentraciones del reactivo seleccionado
-            let concentracionReactivoBase = concentraciones.map(c => c[reactivoBase]);
-
-            // Convertir el vector de tiempo de vuelta a la unidad seleccionada por el usuario
-            let factorTiempo = 1;
-            if (unidadTiempo === 'min') {
-                factorTiempo = 60;
-            } else if (unidadTiempo === 'h') {
-                factorTiempo = 3600;
-            }
-
-            tiempos = tiempos.map(tiempo => tiempo / factorTiempo);
-
-            if (autoTiempo) {
-                const tiempoFinalConvertido = tiempoFinalSegundos / factorTiempo;
-                if (!isNaN(tiempoFinalConvertido) && isFinite(tiempoFinalConvertido)) {
-                    document.getElementById('tiempoFinal').value = tiempoFinalConvertido.toFixed(4);
-                }
-            }
-
-            // Guardar los resultados para el CSV
-            resultados = tiempos.map((tiempo, index) => [tiempo, ...concentraciones[index]]);
-
-            // Graficar los resultados
-            const ctx = document.getElementById('grafica').getContext('2d');
-            if (grafica) grafica.destroy();  // Destruir la gráfica anterior si existe
-            grafica = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: tiempos.map(time => time.toFixed(2)), // Redondear los valores de tiempo a 2 decimales
-                    datasets: [{
-                        label: `Concentración de la Especie ${reactivoBase + 1} (${unidadConcentracion})`,
-                        data: concentracionReactivoBase,
-                        borderColor: 'rgba(75, 192, 192, 1)',
-                        fill: false,
-                    }]
-                },
-                options: {
-                    scales: {
-                        x: { 
-                            title: { display: true, text: `Tiempo (${unidadTiempo})` }
-                        },
-                        y: { 
-                            title: { display: true, text: `Concentración (${unidadConcentracion})` }
+                    let dt = Math.min(hasta - tiempo, 0.02 * (restante / v));
+                    let siguiente;
+                    for (;;) {
+                        if (++iteraciones > 200000 || !Number.isFinite(dt) || dt <= 0 || tiempo + dt === tiempo) {
+                            throw new Error(errorNumerico);
                         }
+                        const completo = paso(avance, dt, v);
+                        siguiente = dosMediosPasos(avance, dt, v);
+                        const margen = Math.max(tolerancia * restante, 4 * Number.EPSILON * avance);
+                        if (Number.isFinite(siguiente) && siguiente >= avance && siguiente <= agotamiento &&
+                            Math.abs(siguiente - completo) <= margen) break;
+                        dt /= 2;
+                    }
+                    if (auto && siguiente === avance) throw new Error(errorNumerico);
+                    if (auto && siguiente >= avanceObjetivo) {
+                        let antes = 0;
+                        let despues = dt;
+                        for (let i = 0; i < 32; i++) {
+                            const mitad = (antes + despues) / 2;
+                            if (dosMediosPasos(avance, mitad, v) >= avanceObjetivo) despues = mitad;
+                            else antes = mitad;
+                        }
+                        tiempo += despues;
+                        avance = avanceObjetivo;
+                        trayectoria.push([tiempo, avance]);
+                        return;
+                    }
+                    tiempo = dt === hasta - tiempo ? hasta : tiempo + dt;
+                    avance = siguiente;
+                    if (auto) trayectoria.push([tiempo, avance]);
+                }
+            }
+
+            const muestras = [[0, 0]];
+            try {
+                if (auto) {
+                    avanzar(Infinity);
+                    let j = 0;
+                    for (let i = 1; i <= intervalos && tiempo > 0; i++) {
+                        const t = tiempo * (i / intervalos);
+                        while (j + 1 < trayectoria.length - 1 && trayectoria[j + 1][0] < t) j++;
+                        const [t0, x0] = trayectoria[j];
+                        const [t1, x1] = trayectoria[j + 1];
+                        muestras.push([t, x0 + (x1 - x0) * ((t - t0) / (t1 - t0))]);
+                    }
+                } else {
+                    for (let i = 1; i <= intervalos; i++) {
+                        const t = fin * (i / intervalos);
+                        avanzar(t);
+                        muestras.push([t, avance]);
                     }
                 }
-            });
+            } catch (error) {
+                return avisar(error.message);
+            }
+
+            const tFinal = tiempo / aSegundos[unidadT];
+            const conversion = agotamiento === 0 ? 100 : 100 * avance / agotamiento;
+            const numero = valor => valor.toLocaleString('es-ES', {maximumSignificantDigits: 7});
+            const filas = muestras.map(([t, x]) => [
+                t / aSegundos[unidadT], ...especies.map(({inicial}, i) => x === 0 ? inicial : concentracion(x, i))
+            ]);
+            if (filas.some(fila => fila.some(valor => !Number.isFinite(valor)))) {
+                return avisar(errorNumerico);
+            }
+            resultados = filas;
+            cabeceraCSV = [`Tiempo (${unidadT})`, ...especies.map((_, i) => `Especie ${i + 1} (${unidadC})`)];
+            campo('limitingStatus').textContent =
+                `Limitante: especie ${limitante + 1} · Conversión: ${numero(conversion)} % · Tiempo final: ${numero(tFinal)} ${unidadT} · ${motivo}.`;
+            aviso.textContent = 'Concentraciones iniciales usadas: ' + especies.map(({inicial}, i) =>
+                `especie ${i + 1} = ${numero(inicial)} ${unidadC}${catalizadores.has(i) ? ' (catalizador)' : aisladas.has(i) ? ' (aislada)' : ''}`
+            ).join(' · ');
+            dibujarPerfil(campo('reactivoBase').selectedIndex, unidadT, unidadC);
+            campo('botonDescargarCSV').disabled = false;
         }
 
-        // Función para limpiar la gráfica y los resultados
+        function dibujarPerfil(indice, unidadT, unidadC) {
+            const grafica = document.getElementById('grafica');
+            const xMax = resultados.at(-1)[0];
+            const yMax = Math.max(...resultados.map(fila => fila[indice + 1]));
+            const x = valor => 86 + 500 * (xMax ? valor / xMax : 0);
+            const y = valor => 300 - 258 * (yMax ? valor / yMax : 0);
+            const etiqueta = valor => valor === 0 ? '0' : Number(valor.toPrecision(4)).toLocaleString('es-ES', {maximumSignificantDigits: 4, notation: valor < 0.001 || valor >= 1e5 ? 'scientific' : 'standard'});
+            const marcas = (maximo, divisiones) => maximo ? Array.from({length: divisiones + 1}, (_, i) => maximo * (i / divisiones)) : [0];
+            const filas = marcas(yMax, 5).map(valor => `
+                <line x1="86" y1="${y(valor)}" x2="586" y2="${y(valor)}" stroke="#dce8e9"/>
+                <text x="76" y="${y(valor) + 4}" text-anchor="end">${etiqueta(valor)}</text>`).join('');
+            const columnas = marcas(xMax, 5).map(valor => `
+                <line x1="${x(valor)}" y1="300" x2="${x(valor)}" y2="306" stroke="#55717a"/>
+                <text x="${x(valor)}" y="325" text-anchor="middle">${etiqueta(valor)}</text>`).join('');
+            const puntos = resultados.map(fila => `${x(fila[0]).toFixed(2)},${y(fila[indice + 1]).toFixed(2)}`).join(' ');
+            const inicio = resultados[0];
+            grafica.innerHTML = `
+                <svg viewBox="0 0 628 365" role="img" aria-labelledby="tituloGrafico" xmlns="http://www.w3.org/2000/svg">
+                    <title id="tituloGrafico">Perfil de concentración de la especie ${indice + 1}</title>
+                    <g fill="#31525f" font-size="16">
+                        <text x="86" y="23">Especie ${indice + 1} · Concentración (${unidadC})</text>
+                        ${filas}${columnas}
+                        <path d="M86 42V300H586" fill="none" stroke="#55717a"/>
+                        <text x="336" y="353" text-anchor="middle">Tiempo (${unidadT})</text>
+                    </g>
+                    <polyline points="${puntos}" fill="none" stroke="#007d70" stroke-width="3" stroke-linejoin="round"/>
+                    <circle cx="${x(inicio[0])}" cy="${y(inicio[indice + 1])}" r="4" fill="#00695f"/>
+                </svg>`;
+        }
+
         function limpiar() {
-            if (grafica) grafica.destroy();  // Destruir la gráfica actual
-            document.getElementById('grafica').getContext('2d').clearRect(0, 0, 400, 400);  // Limpiar el canvas
-            resultados = [];  // Borrar los resultados
-            const statusElement = document.getElementById('limitingStatus'); // === Isolation & limiting-reactant stop rule ===
-            if (statusElement) {
-                statusElement.textContent = '';
-            }
+            document.getElementById('grafica').innerHTML = '<p class="plot-empty">Pulsa «Simular» para ver la concentración frente al tiempo.</p>';
+            resultados = [];
+            cabeceraCSV = [];
+            document.getElementById('botonDescargarCSV').disabled = true;
+            document.getElementById('resumenSimulacion').textContent = '';
+            document.getElementById('limitingStatus').textContent = '';
         }
 
-        // Función para descargar los resultados como un archivo CSV
         function descargarCSV() {
-            if (resultados.length === 0) {
-                alert("No hay resultados para descargar.");
-                return;
-            }
-
-            const notacion = document.getElementById("notacionDecimal").value;
-
-            let csvContent = "data:text/csv;charset=utf-8,";
-            csvContent += "Tiempo;Concentraciones\n";  // Encabezado con punto y coma como separador
-
-            resultados.forEach((fila) => {
-                const filaFormateada = fila.map(num => {
-                    let strNum = num.toFixed(4); // Convertir a cadena con 4 decimales
-                    if (notacion === "coma") {
-                        strNum = strNum.replace('.', ','); // Reemplazar punto por coma
-                    }
-                    return strNum;
-                });
-                csvContent += filaFormateada.join(";") + "\n";  // Agregar cada fila de datos usando punto y coma
-            });
-
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", "resultados_cinetica.csv");
-            document.body.appendChild(link);  // Necesario para hacer clic en el enlace
-            link.click();  // Descargar el archivo
+            if (resultados.length === 0) return;
+            const coma = document.getElementById('notacionDecimal').value === 'coma';
+            const formato = valor => coma ? String(valor).replace('.', ',') : String(valor);
+            const csv = [cabeceraCSV.join(';'), ...resultados.map(fila => fila.map(formato).join(';'))].join('\r\n');
+            const url = URL.createObjectURL(new Blob(['\uFEFF', csv], {type: 'text/csv;charset=utf-8'}));
+            const enlace = document.createElement('a');
+            enlace.href = url;
+            enlace.download = 'resultados_cinetica.csv';
+            document.body.appendChild(enlace);
+            enlace.click();
+            enlace.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
         }
 
         const checkboxTiempoAutomatico = document.getElementById('tiempoAutomatico');
         const manejarCambioTiempoAutomatico = (evento) => {
             document.getElementById('tiempoFinal').disabled = evento.target.checked;
+            stopConvPresetSelect.disabled = !evento.target.checked;
+            stopConvCustomInput.disabled = !evento.target.checked || stopConvPresetSelect.value !== 'custom';
         };
 
         const stopConvPresetSelect = document.getElementById('stopConvPreset');
@@ -1099,7 +589,8 @@
         const manejarCambioStopPreset = () => {
             if (!stopConvPresetSelect || !stopConvCustomInput) return;
             const esPersonalizado = stopConvPresetSelect.value === 'custom';
-            stopConvCustomInput.disabled = !esPersonalizado;
+            stopConvCustomInput.disabled = !esPersonalizado || !checkboxTiempoAutomatico.checked;
+            stopConvCustomInput.hidden = !esPersonalizado;
         };
 
         const manejarCambioStopCustom = () => {
@@ -1116,6 +607,23 @@
         if (stopConvCustomInput) {
             stopConvCustomInput.addEventListener('change', manejarCambioStopCustom);
         }
+
+        const invalidarSimulacion = (evento) => {
+            if (/^orden\d+$/.test(evento.target.id) || ['unidadVelocidad', 'unidadConcentracion'].includes(evento.target.id)) actualizarUnidadesK();
+            if (evento.target.id === 'notacionDecimal' || resultados.length === 0) return;
+            if (evento.target.id === 'reactivoBase') {
+                dibujarPerfil(evento.target.selectedIndex, document.getElementById('unidadTiempo').value,
+                    document.getElementById('unidadConcentracion').value);
+                return;
+            }
+            limpiar();
+            document.getElementById('resumenSimulacion').textContent =
+                'Han cambiado los parámetros. Pulsa «Simular» para calcular los nuevos resultados.';
+        };
+
+        const panelParametros = document.querySelector('.left-panel');
+        panelParametros.addEventListener('input', invalidarSimulacion);
+        panelParametros.addEventListener('change', invalidarSimulacion);
 
         // Inicializar el formulario
         actualizarFormulario();
